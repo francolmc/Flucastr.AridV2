@@ -17,6 +17,7 @@ export interface LLMConfig {
   mode: 'hybrid' | 'single';
   providerConversation: string;
   providerReasoning: string;
+  providerAnalyzer: string;
   anthropic: {
     apiKey: string;
     model: string;
@@ -76,6 +77,10 @@ export interface Profile {
   preferences?: string;
   profileMarkdown?: string;
   updatedAt?: Date;
+  // ✨ Contexto espacial/temporal (Fase 3)
+  city?: string;         // "Buenos Aires"
+  country?: string;      // "Argentina"
+  timezone?: string;     // "America/Argentina/Buenos_Aires"
 }
 
 export interface OnboardingState {

@@ -28,6 +28,7 @@ export function loadConfig(): Config {
 
   const providerConversation = process.env.LLM_PROVIDER_CONVERSATION || 'gemini';
   const providerReasoning = process.env.LLM_PROVIDER_REASONING || 'anthropic';
+  const providerAnalyzer = process.env.LLM_PROVIDER_ANALYZER || 'gemini';
 
   // Anthropic
   const anthropicApiKey = process.env.ANTHROPIC_API_KEY || '';
@@ -59,6 +60,7 @@ export function loadConfig(): Config {
       mode: llmMode,
       providerConversation,
       providerReasoning,
+      providerAnalyzer,
       anthropic: {
         apiKey: anthropicApiKey,
         model: anthropicModel,

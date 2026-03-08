@@ -22,10 +22,15 @@ export class ProfileStore {
         userId: profile.userId,
         agentName: profile.agentName,
         agentTone: profile.agentTone,
+        personality: profile.personality,
         userName: profile.userName,
         preferences: profile.preferences,
         profileMarkdown: profile.profileMarkdown,
-        updatedAt: profile.updatedAt ? new Date(profile.updatedAt) : undefined
+        updatedAt: profile.updatedAt ? new Date(profile.updatedAt) : undefined,
+        // Fase 3: Contexto espacial
+        city: profile.city,
+        country: profile.country,
+        timezone: profile.timezone
       };
     } catch (error) {
       logger.error('Failed to get profile', error);
@@ -42,12 +47,17 @@ export class ProfileStore {
 
       if (profile.agentName !== undefined) updates.agentName = profile.agentName;
       if (profile.agentTone !== undefined) updates.agentTone = profile.agentTone;
+      if (profile.personality !== undefined) updates.personality = profile.personality;
       if (profile.userName !== undefined) updates.userName = profile.userName;
       if (profile.preferences !== undefined) updates.preferences = profile.preferences;
       if (profile.profileMarkdown !== undefined) updates.profileMarkdown = profile.profileMarkdown;
+      // Fase 3: Contexto espacial
+      if (profile.city !== undefined) updates.city = profile.city;
+      if (profile.country !== undefined) updates.country = profile.country;
+      if (profile.timezone !== undefined) updates.timezone = profile.timezone;
 
       this.store.updateProfile(profile.userId, updates);
-      logger.info('Profile updated', { userId: profile.userId });
+      logger.info('Profile updated', { userId: profile.userId, timezone: profile.timezone });
     } catch (error) {
       logger.error('Failed to update profile', error);
       throw new StorageError(`Failed to update profile: ${error}`);

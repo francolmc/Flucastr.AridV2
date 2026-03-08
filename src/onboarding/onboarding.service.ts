@@ -123,17 +123,33 @@ export class OnboardingService {
       const personality = answers.personality?.trim() || 'amigable y útil';
       const interests = !isSkipAnswer(answers.interests || '') ? answers.interests : undefined;
 
+      // Parse location (Fase 3)
+      const location = answers.location?.trim() || '';
+      let city: string | undefined;
+      let country: string | undefined;
+      let timezone: string | undefined;
+
+      if (location && !isSkipAnswer(location)) {
+        const parsed = this.parseLocation(location);
+        city = parsed.city;
+        country = parsed.country;
+        timezone = parsed.timezone;
+      }
+
       // Create/update profile
       this.profileStore.updateProfile({
         userId,
         agentName,
         personality,
         userName,
-        preferences: interests
+        preferences: interests,
+        city,
+        country,
+        timezone
       });
 
       // Update PROFILE.md file in workspace
-      this.updateProfileMdFile(agentName, userName, personality, interests);
+      this.updateProfileMdFile(agentName, userName, personality, interests, city, country);
 
       // Mark onboarding as completed
       this.onboardingStore.markCompleted(userId);
@@ -143,7 +159,10 @@ export class OnboardingService {
         userName,
         agentName,
         personality,
-        hasInterests: !!interests
+        hasInterests: !!interests,
+        city,
+        country,
+        timezone
       });
     } catch (error) {
       logger.error('Failed to complete onboarding', error);
@@ -152,14 +171,93 @@ export class OnboardingService {
   }
 
   /**
+   * Parse location string into city, country and derive timezone
+   */
+  private parseLocation(location: string): { city?: string; country?: string; timezone?: string } {
+    // Expected format: "Ciudad, País" (e.g., "Buenos Aires, Argentina")
+    const parts = location.split(',').map(p => p.trim());
+
+    if (parts.length >= 2) {
+      const city = parts[0];
+      const country = parts[1];
+      const timezone = this.deriveTimezone(country);
+
+      return { city, country, timezone };
+    }
+
+    // If only one part, assume it's the country
+    if (parts.length === 1) {
+      const country = parts[0];
+      const timezone = this.deriveTimezone(country);
+
+      return { country, timezone };
+    }
+
+    return {};
+  }
+
+  /**
+   * Derive timezone from country name
+   * Simple mapping for common Spanish-speaking countries
+   */
+  private deriveTimezone(country: string): string {
+    const timezoneMap: Record<string, string> = {
+      'Argentina': 'America/Argentina/Buenos_Aires',
+      'España': 'Europe/Madrid',
+      'Spain': 'Europe/Madrid',
+      'México': 'America/Mexico_City',
+      'Mexico': 'America/Mexico_City',
+      'Chile': 'America/Santiago',
+      'Colombia': 'America/Bogota',
+      'Perú': 'America/Lima',
+      'Peru': 'America/Lima',
+      'Venezuela': 'America/Caracas',
+      'Uruguay': 'America/Montevideo',
+      'Paraguay': 'America/Asuncion',
+      'Bolivia': 'America/La_Paz',
+      'Ecuador': 'America/Guayaquil',
+      'Costa Rica': 'America/Costa_Rica',
+      'Panamá': 'America/Panama',
+      'Panama': 'America/Panama',
+      'Guatemala': 'America/Guatemala',
+      'Honduras': 'America/Tegucigalpa',
+      'El Salvador': 'America/El_Salvador',
+      'Nicaragua': 'America/Managua',
+      'Cuba': 'America/Havana',
+      'República Dominicana': 'America/Santo_Domingo',
+      'Dominican Republic': 'America/Santo_Domingo',
+      'Puerto Rico': 'America/Puerto_Rico',
+      'Estados Unidos': 'America/New_York',
+      'United States': 'America/New_York',
+      'USA': 'America/New_York',
+      'Brasil': 'America/Sao_Paulo',
+      'Brazil': 'America/Sao_Paulo',
+      'Portugal': 'Europe/Lisbon',
+      'Francia': 'Europe/Paris',
+      'France': 'Europe/Paris',
+      'Italia': 'Europe/Rome',
+      'Italy': 'Europe/Rome',
+      'Alemania': 'Europe/Berlin',
+      'Germany': 'Europe/Berlin',
+      'Reino Unido': 'Europe/London',
+      'United Kingdom': 'Europe/London',
+      'UK': 'Europe/London',
+    };
+
+    return timezoneMap[country] || 'UTC';
+  }
+
+  /**
    * Update PROFILE.md file with onboarding results
    */
-  private updateProfileMdFile(agentName: string, userName?: string, personality?: string, interests?: string): void {
+  private updateProfileMdFile(agentName: string, userName?: string, personality?: string, interests?: string, city?: string, country?: string): void {
     try {
       // Ensure workspace directory exists
       mkdirSync(this.workspacePath, { recursive: true });
 
       const profileMdPath = join(this.workspacePath, 'PROFILE.md');
+
+      const locationInfo = city && country ? `${city}, ${country}` : country || '(No configurado)';
 
       const profileContent = `# Perfil del Agente ${agentName}
 
@@ -172,6 +270,7 @@ export class OnboardingService {
 ## Usuario
 
 - **Nombre:** ${userName || '(No configurado)'}
+- **Ubicación:** ${locationInfo}
 - **Intereses:** ${interests || '(No configurados)'}
 
 ## Cómo Hablo

@@ -4,6 +4,7 @@
  */
 
 import { Profile, Memory } from '../config/types.js';
+import { UserContext } from '../context/types.js';
 import { logger } from '../utils/logger.js';
 
 export class SystemPromptBuilder {
@@ -12,8 +13,9 @@ export class SystemPromptBuilder {
    * IMPORTANT: System prompt must be in Spanish
    * @param profile - User profile
    * @param memories - Optional memories to include (top 10 by importance)
+   * @param context - Optional temporal/spatial context
    */
-  static build(profile: Profile, memories?: Memory[]): string {
+  static build(profile: Profile, memories?: Memory[], context?: UserContext): string {
     const userName = profile.userName || 'el usuario';
     const personality = profile.personality || 'amigable y útil';
 
@@ -54,6 +56,37 @@ export class SystemPromptBuilder {
       memoriesSection += '\n';
     }
 
+    // Build context section (Fase 3)
+    let contextSection = '';
+    if (context) {
+      const { temporal, spatial } = context;
+
+      contextSection = `\n# CONTEXTO TEMPORAL Y ESPACIAL`;
+
+      // Temporal info
+      contextSection += `\n\n## Fecha y Hora Actual`;
+      contextSection += `\n- Ahora es: ${temporal.dateFormatted}`;
+      contextSection += `\n- Hora: ${temporal.timeFormatted} (${temporal.timezoneOffset})`;
+      contextSection += `\n- Momento del día: ${temporal.partOfDay}`;
+
+      // Spatial info
+      if (spatial.city || spatial.country) {
+        contextSection += `\n\n## Ubicación del Usuario`;
+        if (spatial.city && spatial.country) {
+          contextSection += `\n- ${spatial.city}, ${spatial.country}`;
+        } else if (spatial.country) {
+          contextSection += `\n- ${spatial.country}`;
+        }
+        contextSection += `\n- Zona horaria: ${temporal.timezone}`;
+      }
+
+      contextSection += `\n\n## Consideraciones`;
+      contextSection += `\n- Adapta tus respuestas al contexto temporal (ej: si es noche, considera que el usuario puede estar cansado)`;
+      contextSection += `\n- Ten en cuenta la ubicación para referencias culturales y contextuales`;
+      contextSection += `\n- Menciona el contexto temporal naturalmente cuando sea relevante`;
+      contextSection += '\n';
+    }
+
     const systemPrompt = `# IDENTIDAD
 Eres ${profile.agentName}, un asistente conversacional inteligente.
 
@@ -62,7 +95,7 @@ Eres ${profile.agentName}, un asistente conversacional inteligente.
 
 # PERSONALIDAD
 ${personality}
-${memoriesSection}
+${memoriesSection}${contextSection}
 # CAPACIDADES
 - Conversación natural en español
 - Memoria reciente (últimos 40 mensajes)

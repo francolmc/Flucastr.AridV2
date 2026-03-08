@@ -48,7 +48,7 @@ export class LLMFactory {
   private initializeHybridMode(): ProviderSet {
     const conversationProvider = this.getOrCreateProvider(this.config.providerConversation);
     const reasoningProvider = this.getOrCreateProvider(this.config.providerReasoning);
-    const analyzerProvider = this.getOrCreateProvider('gemini'); // Always use Gemini for analysis
+    const analyzerProvider = this.getOrCreateProvider(this.config.providerAnalyzer); // Configurable analyzer provider
 
     return {
       conversation: conversationProvider,

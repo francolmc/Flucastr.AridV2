@@ -1,6 +1,6 @@
 {
   "name": "flucastr-arid-v2",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "AridV2 - Asistente Conversacional Minimalista",
   "main": "dist/index.js",
   "type": "module",

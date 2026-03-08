@@ -29,6 +29,11 @@ export const ONBOARDING_QUESTIONS: OnboardingQuestion[] = [
     id: 'interests',
     question: '¿Hay algo en particular sobre lo que te gustaría hablar o algún tema que te interese? (Opcional - puedes saltar con "omitir")',
     hint: 'Esto me ayudará a personalizar nuestras conversaciones.'
+  },
+  {
+    id: 'location',
+    question: '¿En qué ciudad y país te encuentras? (Opcional - puedes saltar con "omitir")',
+    hint: 'Ejemplo: Buenos Aires, Argentina / Madrid, España / Ciudad de México, México'
   }
 ];
 
