@@ -4,52 +4,49 @@
  */
 
 import { logger } from '../../utils/logger.js';
+import { MarkdownTranslator } from './markdown-translator.js';
 
 export class TelegramFormatter {
   /**
-   * Convert text to Telegram MarkdownV2 format
-   * Escapes special characters that need escaping in MarkdownV2
+   * Convert Markdown to Telegram MarkdownV2 format
+   * Uses MarkdownTranslator to convert standard markdown to Telegram format
    */
   static toTelegramMarkdown(text: string): string {
     try {
-      // Characters that need escaping in MarkdownV2:
-      // _ * [ ] ( ) ~ ` > # + - = | { } . !
-      // BUT: we want to preserve markdown formatting, so we need to be smart
-
-      // For now, use simple escaping approach
-      // In the future, we can implement proper markdown parsing
-      return text
-        .replace(/\\/g, '\\\\')
-        .replace(/_/g, '\\_')
-        .replace(/\*/g, '\\*')
-        .replace(/\[/g, '\\[')
-        .replace(/\]/g, '\\]')
-        .replace(/\(/g, '\\(')
-        .replace(/\)/g, '\\)')
-        .replace(/~/g, '\\~')
-        .replace(/`/g, '\\`')
-        .replace(/>/g, '\\>')
-        .replace(/#/g, '\\#')
-        .replace(/\+/g, '\\+')
-        .replace(/-/g, '\\-')
-        .replace(/=/g, '\\=')
-        .replace(/\|/g, '\\|')
-        .replace(/\{/g, '\\{')
-        .replace(/\}/g, '\\}')
-        .replace(/\./g, '\\.')
-        .replace(/!/g, '\\!');
+      return MarkdownTranslator.translateToTelegram(text);
     } catch (error) {
-      logger.error('Failed to format for Telegram', error);
-      // Return original text if formatting fails
-      return text;
+      logger.error('Failed to translate markdown', error);
+      // Fallback: return plain text version
+      return this.toPlainText(text);
     }
   }
 
   /**
-   * Format text as plain text (no markdown)
+   * Convert to plain text (escape all special characters without formatting)
+   * Used as fallback when MarkdownV2 fails
    */
   static toPlainText(text: string): string {
-    return text;
+    // Escape all MarkdownV2 special characters
+    return text
+      .replace(/\\/g, '\\\\')
+      .replace(/_/g, '\\_')
+      .replace(/\*/g, '\\*')
+      .replace(/\[/g, '\\[')
+      .replace(/\]/g, '\\]')
+      .replace(/\(/g, '\\(')
+      .replace(/\)/g, '\\)')
+      .replace(/~/g, '\\~')
+      .replace(/`/g, '\\`')
+      .replace(/>/g, '\\>')
+      .replace(/#/g, '\\#')
+      .replace(/\+/g, '\\+')
+      .replace(/-/g, '\\-')
+      .replace(/=/g, '\\=')
+      .replace(/\|/g, '\\|')
+      .replace(/\{/g, '\\{')
+      .replace(/\}/g, '\\}')
+      .replace(/\./g, '\\.')
+      .replace(/!/g, '\\!');
   }
 
   /**

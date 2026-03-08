@@ -217,13 +217,26 @@ Puedo ayudarte con:
       // Process message with brain
       const response = await this.brain.processMessage(userId, text);
 
-      // Split long messages if needed
-      const chunks = TelegramFormatter.splitMessage(response);
+      // Translate to Telegram MarkdownV2
+      const formatted = TelegramFormatter.toTelegramMarkdown(response);
 
-      // Send response chunks
+      // Split long messages if needed
+      const chunks = TelegramFormatter.splitMessage(formatted);
+
+      // Send response chunks with MarkdownV2
       for (const chunk of chunks) {
-        // Use plain text to avoid markdown issues
-        await ctx.reply(chunk);
+        try {
+          await ctx.reply(chunk, { parse_mode: 'MarkdownV2' });
+        } catch (error: any) {
+          // Fallback: if MarkdownV2 fails, send as plain text
+          if (error?.response?.error_code === 400) {
+            logger.warn('MarkdownV2 parse error, falling back to plain text', { error: error?.response?.description });
+            const plainChunk = TelegramFormatter.toPlainText(chunk);
+            await ctx.reply(plainChunk);
+          } else {
+            throw error;
+          }
+        }
       }
     } catch (error) {
       logger.error('Error handling message', error);
