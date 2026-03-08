@@ -9,6 +9,45 @@
  */
 
 /**
+ * Obtiene la fecha actual en la zona horaria especificada
+ * Returns a Date object representing "today" in the specified timezone
+ *
+ * @param timezone - Zona horaria (ej: "America/Santiago")
+ * @returns Objeto Date con la fecha actual en la zona horaria especificada
+ */
+export function getTodayInTimezone(timezone: string): Date {
+  const now = new Date();
+
+  // Obtener partes de la fecha EN LA ZONA HORARIA DEL USUARIO
+  const formatter = new Intl.DateTimeFormat('es', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    timeZone: timezone,
+  });
+
+  const parts = formatter.formatToParts(now);
+  const dateObj: Record<string, string> = {};
+
+  for (const part of parts) {
+    if (part.type !== 'literal') {
+      dateObj[part.type] = part.value;
+    }
+  }
+
+  // Construir una fecha local: año-mes-día a las 00:00:00
+  return new Date(
+    parseInt(dateObj.year),
+    parseInt(dateObj.month) - 1,
+    parseInt(dateObj.day),
+    0,
+    0,
+    0,
+    0
+  );
+}
+
+/**
  * Formatea una fecha según la zona horaria especificada
  *
  * @param date - Fecha a formatear

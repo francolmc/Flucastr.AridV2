@@ -47,6 +47,9 @@ Puedo ayudarte con:
 /reset - Limpiar historial de conversación
 /profile - Ver tu perfil
 /memories - Ver lo que he aprendido sobre ti
+/tasks - Ver tus tareas e intenciones futuras
+/done - Marcar tarea como completada
+/delete - Eliminar una intención
 /stats - Ver estadísticas de uso
 
 ¡Empecemos!`;
@@ -187,6 +190,377 @@ Puedo ayudarte con:
     } catch (error) {
       logger.error('Error in /memories handler', error);
       await ctx.reply('Error al obtener las memorias. Intenta de nuevo.');
+    }
+  }
+
+  /**
+   * Handle /tasks command (Fase 6)
+   */
+  async handleTasks(ctx: Context): Promise<void> {
+    const userId = ctx.from?.id.toString();
+    if (!userId) return;
+
+    try {
+      const prospectives = this.brain.getProspectives(userId);
+
+      if (prospectives.length === 0) {
+        await ctx.reply('No tienes intenciones pendientes. ¡Genial! 🎉');
+        return;
+      }
+
+      // Get user profile to access timezone
+      const profile = this.brain.getProfile?.(userId);
+      const timezone = profile?.timezone || 'UTC';
+
+      // Import timezone utils (need to fix this import)
+      const { getTodayInTimezone } = await import('../../context/timezone-utils.js');
+
+      const todayInUserTz = getTodayInTimezone(timezone);
+      const now = new Date();
+      const dayNames = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+      const monthNames = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+
+      // Helper para formatear fecha relativa
+      const formatDateRelative = (date: Date): string => {
+        const diffTime = date.getTime() - now.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        if (diffDays < 0) {
+          const daysPast = Math.abs(diffDays);
+          return `hace ${daysPast} día${daysPast > 1 ? 's' : ''}`;
+        }
+
+        if (diffDays === 0) return 'hoy';
+        if (diffDays === 1) return 'mañana';
+        if (diffDays === 2) return 'pasado mañana';
+        if (diffDays <= 7) return `${dayNames[date.getDay()]} (${diffDays}d)`;
+
+        return `${dayNames[date.getDay()]} ${date.getDate()} ${monthNames[date.getMonth()]}`;
+      };
+
+      // Clasificar temporalmente usando la fecha en la zona horaria del usuario
+      const overdue = prospectives.filter(
+        p => p.dueDate && new Date(p.dueDate) < todayInUserTz
+      );
+
+      const todayEnd = new Date(todayInUserTz);
+      todayEnd.setDate(todayEnd.getDate() + 1);
+
+      const today = prospectives.filter(p => {
+        if (!p.dueDate) return false;
+        const dueDate = new Date(p.dueDate);
+        return dueDate >= todayInUserTz && dueDate < todayEnd;
+      });
+
+      const futureLimit = new Date(todayInUserTz);
+      futureLimit.setDate(futureLimit.getDate() + 7);
+
+      const upcoming = prospectives.filter(p => {
+        if (!p.dueDate) return false;
+        const dueDate = new Date(p.dueDate);
+        return dueDate >= todayEnd && dueDate <= futureLimit;
+      });
+
+      const future = prospectives.filter(p => {
+        if (!p.dueDate) return false;
+        const dueDate = new Date(p.dueDate);
+        return dueDate > futureLimit;
+      });
+
+      const noDate = prospectives.filter(p => !p.dueDate);
+
+      let message = '📋 **Tus Intenciones Pendientes**\n\n';
+
+      // Get today's date in readable format (in user's timezone)
+      const todayFormatter = new Intl.DateTimeFormat('es', {
+        weekday: 'long',
+        day: 'numeric',
+        month: '2-digit',
+        timeZone: timezone,
+      });
+      const todayParts = todayFormatter.formatToParts(new Date());
+      const todayObj: Record<string, string> = {};
+      for (const part of todayParts) {
+        if (part.type !== 'literal') {
+          todayObj[part.type] = part.value;
+        }
+      }
+      const todayMonthNum = parseInt(todayObj.month);
+      const todayFormatted = `${todayObj.weekday} ${todayObj.day} ${monthNames[todayMonthNum - 1]}`;
+
+      if (overdue.length > 0) {
+        message += '⚠️ **Vencidas:**\n';
+        overdue.forEach(p => {
+          const typeEmoji = p.type === 'task' ? '✓' : p.type === 'event' ? '📅' : '🔔';
+          message += `${typeEmoji} ${p.content}`;
+          if (p.dueDate) {
+            const dueDate = new Date(p.dueDate);
+
+            // Obtener día de la semana y fecha en la zona horaria del usuario
+            const formatter = new Intl.DateTimeFormat('es', {
+              weekday: 'long',
+              day: 'numeric',
+              month: '2-digit',
+              timeZone: timezone,
+            });
+            const parts = formatter.formatToParts(dueDate);
+            const partsObj: Record<string, string> = {};
+            for (const part of parts) {
+              if (part.type !== 'literal') {
+                partsObj[part.type] = part.value;
+              }
+            }
+            const monthNum = parseInt(partsObj.month);
+            const dateStr = `${partsObj.weekday} ${partsObj.day} ${monthNames[monthNum - 1]}`;
+
+            const relativeDate = formatDateRelative(dueDate);
+            message += ` _(${dateStr}, ${relativeDate}`;
+            if (p.dueTime) message += ` ${p.dueTime}`;
+            message += `)_`;
+          }
+          message += `\n_ID: ${p.id.substring(0, 8)}_\n\n`;
+        });
+      }
+
+      if (today.length > 0) {
+        message += `📅 **Hoy (${todayFormatted}):**\n`;
+        today.forEach(p => {
+          const typeEmoji = p.type === 'task' ? '✓' : p.type === 'event' ? '📅' : '🔔';
+          message += `${typeEmoji} ${p.content}`;
+          if (p.dueTime) {
+            message += ` _(${p.dueTime})_`;
+          }
+          message += `\n_ID: ${p.id.substring(0, 8)}_\n\n`;
+        });
+      }
+
+      if (upcoming.length > 0) {
+        message += '🔜 **Próximos días:**\n';
+        upcoming.forEach(p => {
+          const typeEmoji = p.type === 'task' ? '✓' : p.type === 'event' ? '📅' : '🔔';
+          const dueDate = new Date(p.dueDate!);
+
+          // Obtener fecha en la zona horaria del usuario
+          const formatter = new Intl.DateTimeFormat('es', {
+            weekday: 'long',
+            day: 'numeric',
+            month: '2-digit',
+            timeZone: timezone,
+          });
+          const parts = formatter.formatToParts(dueDate);
+          const partsObj: Record<string, string> = {};
+          for (const part of parts) {
+            if (part.type !== 'literal') {
+              partsObj[part.type] = part.value;
+            }
+          }
+          const monthNum = parseInt(partsObj.month);
+          const dateStr = `${partsObj.weekday} ${partsObj.day} ${monthNames[monthNum - 1]}`;
+
+          const relativeDate = formatDateRelative(dueDate);
+          message += `${typeEmoji} ${p.content}`;
+          message += ` _(${dateStr}, ${relativeDate}`;
+          if (p.dueTime) {
+            message += ` ${p.dueTime}`;
+          }
+          message += `)_\n_ID: ${p.id.substring(0, 8)}_\n\n`;
+        });
+      }
+
+      if (future.length > 0) {
+        message += '📆 **Más adelante:**\n';
+        future.forEach(p => {
+          const typeEmoji = p.type === 'task' ? '✓' : p.type === 'event' ? '📅' : '🔔';
+          const dueDate = new Date(p.dueDate!);
+
+          // Obtener fecha en la zona horaria del usuario
+          const formatter = new Intl.DateTimeFormat('es', {
+            weekday: 'long',
+            day: 'numeric',
+            month: '2-digit',
+            timeZone: timezone,
+          });
+          const parts = formatter.formatToParts(dueDate);
+          const partsObj: Record<string, string> = {};
+          for (const part of parts) {
+            if (part.type !== 'literal') {
+              partsObj[part.type] = part.value;
+            }
+          }
+          const monthNum = parseInt(partsObj.month);
+          const dateStr = `${partsObj.weekday} ${partsObj.day} ${monthNames[monthNum - 1]}`;
+
+          message += `${typeEmoji} ${p.content}`;
+          message += ` _(${dateStr}`;
+          if (p.dueTime) {
+            message += ` ${p.dueTime}`;
+          }
+          message += `)_\n_ID: ${p.id.substring(0, 8)}_\n\n`;
+        });
+      }
+
+      if (noDate.length > 0) {
+        message += '📝 **Sin fecha específica:**\n';
+        noDate.forEach(p => {
+          const typeEmoji = p.type === 'task' ? '✓' : p.type === 'event' ? '📅' : '🔔';
+          message += `${typeEmoji} ${p.content}\n_ID: ${p.id.substring(0, 8)}_\n\n`;
+        });
+      }
+
+      message += `_Total: ${prospectives.length} intenciones_\n\n`;
+      message += `💡 Usa /done <ID> para completar, /delete <ID> para eliminar`;
+
+      await ctx.reply(message);
+    } catch (error) {
+      logger.error('Error in /tasks handler', error);
+      await ctx.reply('Error al obtener las intenciones. Intenta de nuevo.');
+    }
+  }
+
+  /**
+   * Handle /done command (Fase 6)
+   */
+  async handleDone(ctx: Context): Promise<void> {
+    const userId = ctx.from?.id.toString();
+    if (!userId) return;
+
+    try {
+      const text = (ctx.message as any)?.text || '';
+      const parts = text.split(' ');
+
+      if (parts.length < 2) {
+        await ctx.reply('Uso: /done <ID>\n\nEjemplo: /done 12345678\n\nUsa /tasks para ver los IDs de tus intenciones.');
+        return;
+      }
+
+      const query = parts.slice(1).join(' ').trim();
+
+      // Get all prospectives
+      const prospectives = this.brain.getProspectives(userId);
+
+      // Find by partial ID or content
+      const match = prospectives.find(p =>
+        p.id.startsWith(query) ||
+        p.content.toLowerCase().includes(query.toLowerCase())
+      );
+
+      if (!match) {
+        await ctx.reply(`❌ No encontré ninguna intención que coincida con "${query}".\n\nUsa /tasks para ver tus intenciones.`);
+        return;
+      }
+
+      // Mark as completed
+      this.brain.markProspectiveCompleted(userId, match.id);
+
+      await ctx.reply(`✅ ¡Completado!\n\n"${match.content}"\n\n¡Bien hecho! 🎉`);
+
+      logger.info('Prospective marked completed via command', {
+        userId,
+        prospectiveId: match.id,
+        content: match.content
+      });
+
+    } catch (error) {
+      logger.error('Error in /done handler', error);
+      await ctx.reply('Error al marcar como completada. Intenta de nuevo.');
+    }
+  }
+
+  /**
+   * Handle /delete command (Fase 6)
+   */
+  async handleDelete(ctx: Context): Promise<void> {
+    const userId = ctx.from?.id.toString();
+    if (!userId) return;
+
+    try {
+      const text = (ctx.message as any)?.text || '';
+      const parts = text.split(' ');
+
+      if (parts.length < 2) {
+        await ctx.reply('Uso: /delete <ID>\n\nEjemplo: /delete 12345678\n\nUsa /tasks para ver los IDs de tus intenciones.');
+        return;
+      }
+
+      const query = parts.slice(1).join(' ').trim();
+
+      // Get all prospectives
+      const prospectives = this.brain.getProspectives(userId);
+
+      // Find by partial ID or content
+      const match = prospectives.find(p =>
+        p.id.startsWith(query) ||
+        p.content.toLowerCase().includes(query.toLowerCase())
+      );
+
+      if (!match) {
+        await ctx.reply(`❌ No encontré ninguna intención que coincida con "${query}".\n\nUsa /tasks para ver tus intenciones.`);
+        return;
+      }
+
+      // Delete prospective
+      this.brain.deleteProspective(userId, match.id);
+
+      await ctx.reply(`🗑️ Eliminada:\n\n"${match.content}"`);
+
+      logger.info('Prospective deleted via command', {
+        userId,
+        prospectiveId: match.id,
+        content: match.content
+      });
+
+    } catch (error) {
+      logger.error('Error in /delete handler', error);
+      await ctx.reply('Error al eliminar. Intenta de nuevo.');
+    }
+  }
+
+  /**
+   * Handle /cancel command (Fase 6)
+   */
+  async handleCancel(ctx: Context): Promise<void> {
+    const userId = ctx.from?.id.toString();
+    if (!userId) return;
+
+    try {
+      const text = (ctx.message as any)?.text || '';
+      const parts = text.split(' ');
+
+      if (parts.length < 2) {
+        await ctx.reply('Uso: /cancel <ID>\n\nEjemplo: /cancel 12345678\n\nUsa /tasks para ver los IDs de tus intenciones.');
+        return;
+      }
+
+      const query = parts.slice(1).join(' ').trim();
+
+      // Get all prospectives
+      const prospectives = this.brain.getProspectives(userId);
+
+      // Find by partial ID or content
+      const match = prospectives.find(p =>
+        p.id.startsWith(query) ||
+        p.content.toLowerCase().includes(query.toLowerCase())
+      );
+
+      if (!match) {
+        await ctx.reply(`❌ No encontré ninguna intención que coincida con "${query}".\n\nUsa /tasks para ver tus intenciones.`);
+        return;
+      }
+
+      // Mark as cancelled
+      this.brain.markProspectiveCancelled(userId, match.id);
+
+      await ctx.reply(`🚫 Cancelado:\n\n"${match.content}"`);
+
+      logger.info('Prospective marked cancelled via command', {
+        userId,
+        prospectiveId: match.id,
+        content: match.content
+      });
+
+    } catch (error) {
+      logger.error('Error in /cancel handler', error);
+      await ctx.reply('Error al cancelar. Intenta de nuevo.');
     }
   }
 

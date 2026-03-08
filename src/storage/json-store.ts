@@ -15,6 +15,7 @@ interface StoreData {
   onboarding: Record<string, any>;
   tokens: Record<string, any[]>;
   memories: Record<string, any[]>;
+  prospective: Record<string, any[]>; // Fase 6: Memoria prospectiva
 }
 
 export class JSONStore {
@@ -23,7 +24,8 @@ export class JSONStore {
     profiles: {},
     onboarding: {},
     tokens: {},
-    memories: {}
+    memories: {},
+    prospective: {}
   };
   private filePath: string;
   private initialized = false;
@@ -52,6 +54,7 @@ export class JSONStore {
       this.data.onboarding = this.data.onboarding || {};
       this.data.tokens = this.data.tokens || {};
       this.data.memories = this.data.memories || {};
+      this.data.prospective = this.data.prospective || {};
 
       this.initialized = true;
     } catch (error) {
@@ -287,6 +290,39 @@ export class JSONStore {
     if (this.data.memories[userId]) {
       this.data.memories[userId] = this.data.memories[userId].filter(
         m => m.id !== memoryId
+      );
+      this.saveSync();
+    }
+  }
+
+  // Prospective Memory methods (Fase 6)
+  addProspective(userId: string, prospective: any): void {
+    if (!this.data.prospective[userId]) {
+      this.data.prospective[userId] = [];
+    }
+
+    this.data.prospective[userId].push(prospective);
+    this.saveSync();
+  }
+
+  getProspectives(userId: string): any[] {
+    return this.data.prospective[userId] || [];
+  }
+
+  updateProspective(userId: string, prospectiveId: string, updates: any): void {
+    const prospectives = this.data.prospective[userId] || [];
+    const index = prospectives.findIndex(p => p.id === prospectiveId);
+
+    if (index !== -1) {
+      prospectives[index] = { ...prospectives[index], ...updates };
+      this.saveSync();
+    }
+  }
+
+  deleteProspective(userId: string, prospectiveId: string): void {
+    if (this.data.prospective[userId]) {
+      this.data.prospective[userId] = this.data.prospective[userId].filter(
+        p => p.id !== prospectiveId
       );
       this.saveSync();
     }

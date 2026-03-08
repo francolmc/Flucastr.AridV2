@@ -3,7 +3,7 @@
  * Generates system prompts in Spanish (<500 tokens)
  */
 
-import { Profile, Memory } from '../config/types.js';
+import { Profile, Memory, ProspectiveMemory } from '../config/types.js';
 import { UserContext } from '../context/types.js';
 import { logger } from '../utils/logger.js';
 
@@ -14,8 +14,14 @@ export class SystemPromptBuilder {
    * @param profile - User profile
    * @param memories - Optional memories to include (top 10 by importance)
    * @param context - Optional temporal/spatial context
+   * @param prospectives - Optional prospective memories (Fase 6)
    */
-  static build(profile: Profile, memories?: Memory[], context?: UserContext): string {
+  static build(
+    profile: Profile,
+    memories?: Memory[],
+    context?: UserContext,
+    prospectives?: ProspectiveMemory[]
+  ): string {
     const userName = profile.userName || 'el usuario';
     const personality = profile.personality || 'amigable y útil';
     const tone = profile.agentTone || '';
@@ -88,6 +94,103 @@ export class SystemPromptBuilder {
       contextSection += '\n';
     }
 
+    // Build prospective memories section (Fase 6)
+    let prospectiveSection = '';
+    if (prospectives && prospectives.length > 0 && context) {
+      const now = new Date();
+
+      // Clasificar temporalmente
+      const overdue = prospectives.filter(
+        p => p.status === 'overdue' || (p.dueDate && new Date(p.dueDate) < now && p.status === 'pending')
+      );
+      const today = prospectives.filter(p => {
+        if (!p.dueDate) return false;
+        const dueDate = new Date(p.dueDate);
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const todayEnd = new Date(todayStart);
+        todayEnd.setDate(todayEnd.getDate() + 1);
+        return dueDate >= todayStart && dueDate < todayEnd && p.status === 'pending';
+      });
+      const upcoming = prospectives.filter(p => {
+        if (!p.dueDate) return false;
+        const dueDate = new Date(p.dueDate);
+        const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+        const futureLimit = new Date(now);
+        futureLimit.setDate(futureLimit.getDate() + 7);
+        return dueDate >= todayEnd && dueDate <= futureLimit && p.status === 'pending';
+      });
+
+      prospectiveSection = `\n# INTENCIONES Y COMPROMISOS\n`;
+      prospectiveSection += `\nTienes consciencia de las intenciones futuras de ${userName}:\n`;
+
+      if (overdue.length > 0) {
+        prospectiveSection += `\n## ⚠️ Vencidas (requieren atención)\n`;
+        overdue.slice(0, 5).forEach(p => {
+          prospectiveSection += `- ${p.content}`;
+          if (p.dueDate) {
+            const daysAgo = Math.floor((now.getTime() - new Date(p.dueDate).getTime()) / (1000 * 60 * 60 * 24));
+            prospectiveSection += ` (era para hace ${daysAgo} día${daysAgo > 1 ? 's' : ''})`;
+          }
+          prospectiveSection += '\n';
+        });
+      }
+
+      if (today.length > 0) {
+        prospectiveSection += `\n## 📅 Hoy\n`;
+        today.forEach(p => {
+          prospectiveSection += `- ${p.content}`;
+          if (p.dueTime) {
+            prospectiveSection += ` (${p.dueTime})`;
+          }
+          prospectiveSection += '\n';
+        });
+      }
+
+      if (upcoming.length > 0) {
+        prospectiveSection += `\n## 🔜 Próximos días\n`;
+        upcoming.slice(0, 5).forEach(p => {
+          prospectiveSection += `- ${p.content}`;
+          if (p.dueDate) {
+            const dueDate = new Date(p.dueDate);
+            const diffDays = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+            if (diffDays === 1) {
+              prospectiveSection += ` (mañana`;
+            } else if (diffDays === 2) {
+              prospectiveSection += ` (pasado mañana`;
+            } else {
+              const dayNames = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+              prospectiveSection += ` (${dayNames[dueDate.getDay()]}`;
+            }
+            if (p.dueTime) {
+              prospectiveSection += ` ${p.dueTime}`;
+            }
+            prospectiveSection += ')';
+          }
+          prospectiveSection += '\n';
+        });
+      }
+
+      prospectiveSection += `\n## 💡 Cómo usar esta información\n`;
+      prospectiveSection += `\n**IMPORTANTE: Sé proactivo con los recordatorios**\n`;
+
+      if (overdue.length > 0) {
+        prospectiveSection += `\n- ⚠️ PRIORITARIO: ${overdue[0].content.toLowerCase()} está VENCIDA. SIEMPRE menciona esto en la próxima respuesta, sin importar el contexto.\n`;
+      }
+
+      if (today.length > 0) {
+        prospectiveSection += `\n- 📅 IMPORTANTE: Hoy tiene ${today.length} intención(es). Menciona naturalmente, especialmente si el usuario pregunta qué hacer.\n`;
+      }
+
+      prospectiveSection += `\n- Pregunta sobre progreso si algo está vencido\n`;
+      prospectiveSection += `- Recuerda cuando es relevante: "¿Cómo va con...?", "¿Ya hiciste...?"\n`;
+      prospectiveSection += `- Ofrece ayuda: "¿Necesitas ayuda para preparar...?"\n`;
+      prospectiveSection += `\n**Ejemplos de recordatorios proactivos:**\n`;
+      prospectiveSection += `- Usuario dice "Hola": "${overdue.length > 0 ? '⚠️ Por cierto, aún está pendiente: ' + overdue[0].content.toLowerCase() + '. ' : ''}¿Qué tal?"\n`;
+      prospectiveSection += `- Usuario pregunta qué hacer: "Tienes ${today.length > 0 ? 'para hoy: ' + today[0].content.toLowerCase() : upcoming[0]?.content.toLowerCase()}""\n`;
+      prospectiveSection += `- Usuario dice "Estoy libre": "¿Podrías aprovechar para ${today[0]?.content.toLowerCase() || upcoming[0]?.content.toLowerCase()}?"\n`;
+      prospectiveSection += '\n';
+    }
+
     const systemPrompt = `# IDENTIDAD
 Eres ${profile.agentName}, un asistente conversacional inteligente.
 
@@ -96,11 +199,12 @@ Eres ${profile.agentName}, un asistente conversacional inteligente.
 
 # PERSONALIDAD
 ${personality}${tone ? `\n- Tono: ${tone}` : ''}
-${memoriesSection}${contextSection}
+${memoriesSection}${contextSection}${prospectiveSection}
 # CAPACIDADES
 - Conversación natural en español
 - Memoria reciente (últimos 40 mensajes)
 - Memoria de largo plazo (conocimiento acumulado sobre ti)
+- Memoria prospectiva (intenciones futuras, tareas, eventos)
 - Ayudar con ideas, preguntas, consejos y conversaciones interesantes
 
 # RESTRICCIONES
@@ -155,6 +259,7 @@ Cuando el usuario mencione algo personal, importante o emotionalmente significat
       agentName: profile.agentName,
       personality: personality.substring(0, 50),
       memoriesIncluded: memories?.length || 0,
+      prospectivesIncluded: prospectives?.length || 0,
       length: systemPrompt.length,
       estimatedTokens: Math.ceil(systemPrompt.length / 4)
     });

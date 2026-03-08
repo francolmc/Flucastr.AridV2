@@ -85,6 +85,10 @@ export class TelegramBot {
     this.bot.command('reset', (ctx) => this.handlers.handleReset(ctx));
     this.bot.command('profile', (ctx) => this.handlers.handleProfile(ctx));
     this.bot.command('memories', (ctx) => this.handlers.handleMemories(ctx));
+    this.bot.command('tasks', (ctx) => this.handlers.handleTasks(ctx));
+    this.bot.command('done', (ctx) => this.handlers.handleDone(ctx));
+    this.bot.command('delete', (ctx) => this.handlers.handleDelete(ctx));
+    this.bot.command('cancel', (ctx) => this.handlers.handleCancel(ctx));
     this.bot.command('stats', (ctx) => this.handlers.handleStats(ctx));
 
     // Text messages

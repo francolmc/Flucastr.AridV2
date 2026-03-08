@@ -127,3 +127,69 @@ export interface Memory {
   lastAccessed?: Date;          // Última vez que se usó
   accessCount: number;          // Cuántas veces se ha usado
 }
+
+/**
+ * Prospective Memory - Memoria Prospectiva (Intenciones Futuras)
+ */
+export type ProspectiveType = 'task' | 'event' | 'reminder';
+
+export type ProspectiveCategory =
+  | 'personal'   // Vida personal (familia, hobbies, personal care)
+  | 'work'       // Trabajo (reuniones, proyectos, deadlines)
+  | 'health'     // Salud (ejercicio, médico, medicación)
+  | 'social';    // Social (eventos, amigos, cumpleaños)
+
+export type ProspectiveStatus =
+  | 'pending'    // Aún no vencida
+  | 'overdue'    // Pasó la fecha y no se completó
+  | 'completed'  // Marcada como completada
+  | 'cancelled'; // Cancelada
+
+/**
+ * RecurrenceRule - Regla de recurrencia para tareas/eventos repetitivos
+ */
+export interface RecurrenceRule {
+  frequency: 'daily' | 'weekly' | 'monthly' | 'yearly';
+  interval: number;              // Cada cuántos (ej: cada 2 días = interval: 2)
+  daysOfWeek?: number[];         // [0-6] donde 0=domingo (para weekly)
+  dayOfMonth?: number;           // 1-31 (para monthly)
+  endDate?: Date;                // Cuándo termina la recurrencia (opcional)
+  occurrences?: number;          // O después de N ocurrencias
+}
+
+/**
+ * ProspectiveMemory - Intención futura del usuario
+ */
+export interface ProspectiveMemory {
+  id: string;                    // UUID
+  userId: string;                // Usuario owner
+
+  // Clasificación
+  type: ProspectiveType;         // 'task' | 'event' | 'reminder'
+  category: ProspectiveCategory; // 'personal' | 'work' | 'health' | 'social'
+
+  // Contenido
+  content: string;               // Descripción natural (1-2 líneas)
+  context?: string;              // Contexto adicional (dónde, con quién, por qué)
+
+  // Temporal
+  dueDate?: Date;                // Cuándo debe hacerse/recordarse
+  dueTime?: string;              // Hora específica (HH:MM) o null si todo el día
+  isAllDay: boolean;             // True si es evento de día completo
+
+  // Recurrencia
+  recurrence?: RecurrenceRule;   // null si es one-time
+  nextOccurrence?: Date;         // Próxima ocurrencia (calculado)
+
+  // Estado
+  status: ProspectiveStatus;     // 'pending' | 'completed' | 'cancelled' | 'overdue'
+  priority: number;              // 0.0-1.0 (similar a importance en Memory)
+
+  // Metadata
+  source: string;                // "conversation-{timestamp}"
+  createdAt: Date;
+  updatedAt: Date;
+  completedAt?: Date;
+  lastMentioned?: Date;          // Última vez que el asistente lo mencionó
+  mentionCount: number;          // Cuántas veces se mencionó
+}

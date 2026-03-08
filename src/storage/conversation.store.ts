@@ -76,4 +76,11 @@ export class ConversationStore {
       throw new StorageError(`Failed to get message count: ${error}`);
     }
   }
+
+  /**
+   * Get the underlying JSONStore instance (for other stores)
+   */
+  getStore() {
+    return this.store;
+  }
 }
