@@ -14,6 +14,7 @@ interface StoreData {
   profiles: Record<string, any>;
   onboarding: Record<string, any>;
   tokens: Record<string, any[]>;
+  memories: Record<string, any[]>;
 }
 
 export class JSONStore {
@@ -21,7 +22,8 @@ export class JSONStore {
     conversations: {},
     profiles: {},
     onboarding: {},
-    tokens: {}
+    tokens: {},
+    memories: {}
   };
   private filePath: string;
   private initialized = false;
@@ -43,6 +45,13 @@ export class JSONStore {
         // File doesn't exist, use default empty data
         logger.info('New store created', { path: this.filePath });
       }
+
+      // Ensure all required sections exist
+      this.data.conversations = this.data.conversations || {};
+      this.data.profiles = this.data.profiles || {};
+      this.data.onboarding = this.data.onboarding || {};
+      this.data.tokens = this.data.tokens || {};
+      this.data.memories = this.data.memories || {};
 
       this.initialized = true;
     } catch (error) {
@@ -247,6 +256,39 @@ export class JSONStore {
   async flushToDisk(): Promise<void> {
     if (this.initialized) {
       await this.save();
+    }
+  }
+
+  // Memory methods
+  addMemory(userId: string, memory: any): void {
+    if (!this.data.memories[userId]) {
+      this.data.memories[userId] = [];
+    }
+
+    this.data.memories[userId].push(memory);
+    this.saveSync();
+  }
+
+  getMemories(userId: string): any[] {
+    return this.data.memories[userId] || [];
+  }
+
+  updateMemory(userId: string, memoryId: string, updates: any): void {
+    const memories = this.data.memories[userId] || [];
+    const index = memories.findIndex(m => m.id === memoryId);
+
+    if (index !== -1) {
+      memories[index] = { ...memories[index], ...updates };
+      this.saveSync();
+    }
+  }
+
+  deleteMemory(userId: string, memoryId: string): void {
+    if (this.data.memories[userId]) {
+      this.data.memories[userId] = this.data.memories[userId].filter(
+        m => m.id !== memoryId
+      );
+      this.saveSync();
     }
   }
 }

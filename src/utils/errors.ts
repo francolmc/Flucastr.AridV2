@@ -23,6 +23,13 @@ export class StorageError extends AppError {
   }
 }
 
+export class BrainError extends AppError {
+  constructor(message: string) {
+    super(message, 'BRAIN_ERROR');
+    this.name = 'BrainError';
+  }
+}
+
 export class OnboardingError extends AppError {
   constructor(message: string) {
     super(message, 'ONBOARDING_ERROR');

@@ -2,7 +2,9 @@
 
 **AridV2** es un asistente conversacional minimalista construido desde cero con enfoque en simplicidad, extensibilidad y eficiencia.
 
-## 🎯 Características (Fase 1)
+## 🎯 Características
+
+### Fase 1 ✅ (Completada)
 
 - ✅ **Conversación Natural:** Chat inteligente en español
 - ✅ **Multi-Provider LLM:** Soporte para Anthropic Claude, Google Gemini, y Ollama
@@ -14,15 +16,29 @@
 - ✅ **Onboarding:** Configuración inicial minimalista (2-3 preguntas)
 - ✅ **Interfaz Telegram:** Bot completo con comandos
 
+### Fase 2 ✅ (Completada)
+
+- ✅ **Memoria Dinámica:** Sistema de aprendizaje continuo sobre el usuario
+- ✅ **Extracción Automática:** LLM analiza conversaciones y extrae información relevante
+- ✅ **Categorización Inteligente:** Memorias organizadas por tipo (hechos, preferencias, proyectos, contexto)
+- ✅ **Personalización:** System prompt incluye conocimiento acumulado del usuario
+- ✅ **Comando /memories:** Inspeccionar memorias guardadas
+
 ## 🏗️ Arquitectura
 
 ```
 AridV2
 ├── Brain (Cerebro)       - Orquestación de conversación
+│   ├── IntentAnalyzer    - Análisis de intención con LLM
+│   ├── MemoryExtractor   - Extracción automática de memorias
+│   └── SystemPromptBuilder - Construcción de prompts con contexto
 ├── Senses (Sentidos)     - Inputs (Telegram)
 ├── Hands (Manos)         - Tools (vacío en Fase 1)
 ├── LLM Layer            - Multi-provider abstraction
-├── Storage              - SQLite (historial, perfiles, tokens)
+├── Storage              - JSON-based (historial, perfiles, tokens, memorias)
+│   ├── ConversationStore - Últimos 40 mensajes
+│   ├── ProfileStore      - Perfil del usuario
+│   └── MemoryStore       - Memorias de largo plazo
 └── Onboarding           - Setup inicial
 ```
 
@@ -92,7 +108,65 @@ pnpm test:coverage
 - `/start` - Mensaje de bienvenida
 - `/reset` - Limpiar historial de conversación
 - `/profile` - Ver perfil del usuario
+- `/memories` - Ver memorias guardadas sobre ti
 - `/stats` - Ver estadísticas de uso de tokens
+
+## 🧠 Sistema de Memoria Dinámica (Fase 2)
+
+AridV2 ahora aprende continuamente sobre ti mientras conversas:
+
+### ¿Cómo funciona?
+
+1. **Extracción Automática:** Después de cada respuesta, un LLM analiza la conversación reciente (últimos 6 mensajes) y extrae información relevante
+2. **Categorización:** Las memorias se clasifican en:
+   - **Hechos (fact):** Información factual sobre ti (ej: "Es desarrollador fullstack")
+   - **Preferencias (preference):** Gustos y estilos (ej: "Prefiere código con ejemplos")
+   - **Proyectos (project):** Trabajos actuales (ej: "Está desarrollando AridV2")
+   - **Contexto (context):** Información contextual relevante (ej: "Trabaja desde casa")
+3. **Priorización:** Cada memoria tiene un score de importancia (0.0-1.0)
+4. **Uso en Conversación:** Las 10 memorias más importantes se incluyen en el system prompt
+
+### Ejemplos de uso
+
+**Conversación inicial:**
+```
+Usuario: Estoy trabajando en un proyecto de IA, un asistente conversacional
+Asistente: ¡Interesante! Cuéntame más sobre tu proyecto
+[Se guarda memoria: "Está trabajando en un asistente conversacional de IA"]
+```
+
+**Sesión posterior (días después):**
+```
+Usuario: Hola
+Asistente: ¡Hola! ¿Cómo va el desarrollo de tu asistente de IA?
+[El asistente recuerda el proyecto gracias a la memoria guardada]
+```
+
+### Ver tus memorias
+
+Usa el comando `/memories` para inspeccionar qué ha aprendido el asistente sobre ti:
+
+```
+📝 Memorias sobre ti
+
+Hechos:
+• Es desarrollador fullstack
+• Usa principalmente TypeScript y React
+
+Preferencias:
+• Prefiere explicaciones con ejemplos de código
+
+Proyectos:
+• Está desarrollando AridV2, un asistente conversacional
+
+Total: 4 memorias
+```
+
+### Privacidad
+
+- Las memorias se almacenan localmente en tu servidor
+- Puedes inspeccionar todas las memorias con `/memories`
+- Las memorias se usan exclusivamente para personalizar tus conversaciones
 
 ## 🏛️ Estructura del Proyecto
 

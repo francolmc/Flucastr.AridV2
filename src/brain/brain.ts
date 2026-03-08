@@ -6,9 +6,11 @@
 import { LLMProvider } from '../llm/provider.interface.js';
 import { ConversationStore } from '../storage/conversation.store.js';
 import { ProfileStore } from '../storage/profile.store.js';
+import { MemoryStore } from '../storage/memory.store.js';
 import { TokenTracker } from './token-tracker.js';
 import { SystemPromptBuilder } from './system-prompt.js';
 import { IntentAnalyzer } from './intent-analyzer.js';
+import { MemoryExtractor } from './memory-extractor.js';
 import { LLMMessage } from '../config/types.js';
 import { logger } from '../utils/logger.js';
 
@@ -22,16 +24,20 @@ export class Brain {
   private conversationProvider: LLMProvider;
   private reasoningProvider: LLMProvider;
   private intentAnalyzer: IntentAnalyzer;
+  private memoryExtractor: MemoryExtractor;
   private conversationStore: ConversationStore;
   private profileStore: ProfileStore;
+  private memoryStore: MemoryStore;
   private tokenTracker: TokenTracker;
 
   constructor(config: BrainConfig) {
     this.conversationProvider = config.conversationProvider;
     this.reasoningProvider = config.reasoningProvider;
     this.intentAnalyzer = new IntentAnalyzer(config.analyzerProvider);
+    this.memoryExtractor = new MemoryExtractor(config.analyzerProvider);
     this.conversationStore = new ConversationStore();
     this.profileStore = new ProfileStore();
+    this.memoryStore = new MemoryStore();
     this.tokenTracker = new TokenTracker();
 
     logger.info('Brain initialized', {
@@ -53,7 +59,16 @@ export class Brain {
       // 2. Get user profile
       const profile = this.profileStore.getProfile(userId);
 
-      // 3. Analyze intent to decide which model to use
+      // 3. Get memories (top 15 most important)
+      const memories = this.memoryStore.getMemories(userId, 15);
+
+      logger.debug('Context retrieved', {
+        userId,
+        historyCount: history.length,
+        memoriesCount: memories.length
+      });
+
+      // 4. Analyze intent to decide which model to use
       const conversationContext = history
         .slice(-3)
         .map(m => `${m.role}: ${m.content}`);
@@ -67,7 +82,7 @@ export class Brain {
         confidence: intent.confidence
       });
 
-      // 4. Select provider based on intent
+      // 5. Select provider based on intent
       const provider = intent.needsReasoning
         ? this.reasoningProvider
         : this.conversationProvider;
@@ -78,10 +93,10 @@ export class Brain {
         reasoning: intent.reasoning
       });
 
-      // 5. Build system prompt
-      const systemPrompt = SystemPromptBuilder.build(profile);
+      // 6. Build system prompt with memories
+      const systemPrompt = SystemPromptBuilder.build(profile, memories);
 
-      // 6. Prepare messages for LLM
+      // 7. Prepare messages for LLM
       const messages: LLMMessage[] = [
         ...history.map(h => ({
           role: h.role,
@@ -90,10 +105,10 @@ export class Brain {
         { role: 'user' as const, content: text }
       ];
 
-      // 7. Generate response
+      // 8. Generate response
       const response = await provider.generateContent(messages, systemPrompt);
 
-      // 8. Save user message
+      // 9. Save user message
       this.conversationStore.saveMessage({
         userId,
         role: 'user',
@@ -101,7 +116,7 @@ export class Brain {
         timestamp
       });
 
-      // 9. Save assistant response
+      // 10. Save assistant response
       this.conversationStore.saveMessage({
         userId,
         role: 'assistant',
@@ -110,14 +125,35 @@ export class Brain {
         modelUsed: provider.getName()
       });
 
-      // 10. Track token usage
+      // 11. Extract and save new memories
+      const recentMessages = this.conversationStore.getHistory(userId, 6);
+      const newMemories = await this.memoryExtractor.extractMemories(
+        userId,
+        recentMessages,
+        memories
+      );
+
+      if (newMemories.length > 0) {
+        for (const memory of newMemories) {
+          this.memoryStore.saveMemory(memory);
+          logger.info('New memory extracted', {
+            userId,
+            category: memory.category,
+            importance: memory.importance,
+            content: memory.content.substring(0, 50) + '...'
+          });
+        }
+      }
+
+      // 12. Track token usage
       this.tokenTracker.track(userId, provider.getName(), response.usage);
 
       logger.info('Message processed', {
         userId,
         provider: provider.getName(),
         inputTokens: response.usage.inputTokens,
-        outputTokens: response.usage.outputTokens
+        outputTokens: response.usage.outputTokens,
+        newMemories: newMemories.length
       });
 
       return response.content;
@@ -154,5 +190,19 @@ export class Brain {
    */
   getMessageCount(userId: string): number {
     return this.conversationStore.getMessageCount(userId);
+  }
+
+  /**
+   * Get user memories
+   */
+  getMemories(userId: string, limit?: number) {
+    return this.memoryStore.getMemories(userId, limit);
+  }
+
+  /**
+   * Get memory count
+   */
+  getMemoryCount(userId: string): number {
+    return this.memoryStore.getCount(userId);
   }
 }

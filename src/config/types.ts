@@ -95,3 +95,23 @@ export interface TokenStats {
   outputTokens: number;
   messageCount: number;
 }
+
+/**
+ * Memory Category - Tipos de memorias que el asistente puede almacenar
+ */
+export type MemoryCategory = 'fact' | 'preference' | 'project' | 'context';
+
+/**
+ * Memory - Información aprendida sobre el usuario
+ */
+export interface Memory {
+  id: string;                    // UUID de la memoria
+  userId: string;                // ID del usuario
+  category: MemoryCategory;      // Categoría de la memoria
+  content: string;               // Contenido descriptivo de la memoria
+  source: string;                // Origen (conversationId, timestamp)
+  importance: number;            // Score 0.0-1.0 para priorización
+  createdAt: Date;              // Cuándo se creó
+  lastAccessed?: Date;          // Última vez que se usó
+  accessCount: number;          // Cuántas veces se ha usado
+}

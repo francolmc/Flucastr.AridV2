@@ -37,11 +37,13 @@ Puedo ayudarte con:
 - Responder preguntas
 - Dar ideas y consejos
 - Mantener conversaciones interesantes
+- Aprender sobre ti y personalizar mis respuestas
 
 **Comandos disponibles:**
 /start - Mostrar este mensaje
 /reset - Limpiar historial de conversación
 /profile - Ver tu perfil
+/memories - Ver lo que he aprendido sobre ti
 /stats - Ver estadísticas de uso
 
 ¡Empecemos!`;
@@ -116,6 +118,72 @@ Puedo ayudarte con:
     } catch (error) {
       logger.error('Error in /stats handler', error);
       await ctx.reply('Error al obtener estadísticas. Intenta de nuevo.');
+    }
+  }
+
+  /**
+   * Handle /memories command
+   */
+  async handleMemories(ctx: Context): Promise<void> {
+    const userId = ctx.from?.id.toString();
+    if (!userId) return;
+
+    try {
+      const memories = this.brain.getMemories(userId, 20);
+
+      if (memories.length === 0) {
+        await ctx.reply('Aún no tengo memorias sobre ti. ¡Sigamos conversando para que pueda conocerte mejor!');
+        return;
+      }
+
+      // Group by category
+      const byCategory = {
+        fact: memories.filter(m => m.category === 'fact'),
+        preference: memories.filter(m => m.category === 'preference'),
+        project: memories.filter(m => m.category === 'project'),
+        context: memories.filter(m => m.category === 'context')
+      };
+
+      let message = '📝 **Memorias sobre ti**\n\n';
+
+      if (byCategory.fact.length > 0) {
+        message += '**Hechos:**\n';
+        byCategory.fact.forEach(m => {
+          message += `• ${m.content}\n`;
+        });
+        message += '\n';
+      }
+
+      if (byCategory.preference.length > 0) {
+        message += '**Preferencias:**\n';
+        byCategory.preference.forEach(m => {
+          message += `• ${m.content}\n`;
+        });
+        message += '\n';
+      }
+
+      if (byCategory.project.length > 0) {
+        message += '**Proyectos:**\n';
+        byCategory.project.forEach(m => {
+          message += `• ${m.content}\n`;
+        });
+        message += '\n';
+      }
+
+      if (byCategory.context.length > 0) {
+        message += '**Contexto:**\n';
+        byCategory.context.forEach(m => {
+          message += `• ${m.content}\n`;
+        });
+        message += '\n';
+      }
+
+      message += `_Total: ${memories.length} memorias_`;
+
+      await ctx.reply(message);
+    } catch (error) {
+      logger.error('Error in /memories handler', error);
+      await ctx.reply('Error al obtener las memorias. Intenta de nuevo.');
     }
   }
 

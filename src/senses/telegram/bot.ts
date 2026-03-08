@@ -74,6 +74,7 @@ export class TelegramBot {
     this.bot.command('start', (ctx) => this.handlers.handleStart(ctx));
     this.bot.command('reset', (ctx) => this.handlers.handleReset(ctx));
     this.bot.command('profile', (ctx) => this.handlers.handleProfile(ctx));
+    this.bot.command('memories', (ctx) => this.handlers.handleMemories(ctx));
     this.bot.command('stats', (ctx) => this.handlers.handleStats(ctx));
 
     // Text messages
