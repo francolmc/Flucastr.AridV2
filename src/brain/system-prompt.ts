@@ -18,6 +18,7 @@ export class SystemPromptBuilder {
   static build(profile: Profile, memories?: Memory[], context?: UserContext): string {
     const userName = profile.userName || 'el usuario';
     const personality = profile.personality || 'amigable y útil';
+    const tone = profile.agentTone || '';
 
     // Build memories section if provided
     let memoriesSection = '';
@@ -94,7 +95,7 @@ Eres ${profile.agentName}, un asistente conversacional inteligente.
 - Nombre: ${userName}
 
 # PERSONALIDAD
-${personality}
+${personality}${tone ? `\n- Tono: ${tone}` : ''}
 ${memoriesSection}${contextSection}
 # CAPACIDADES
 - Conversación natural en español

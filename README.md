@@ -33,6 +33,22 @@
 - ✅ **Onboarding de Ubicación:** Pregunta opcional sobre ciudad y país
 - ✅ **Sin Dependencias:** Usa Intl.DateTimeFormat nativo de JavaScript
 
+### Fase 4 ✅ (Completada)
+
+- ✅ **Formato MarkdownV2:** Respuestas visuales con formato en Telegram
+- ✅ **MarkdownTranslator:** Conversión segura Markdown → MarkdownV2
+- ✅ **Headings, listas, código:** Soporte completo de formato
+- ✅ **Fallback automático:** A texto plano si falla el formato
+
+### Fase 5 ✅ (Completada)
+
+- ✅ **Transcripción de Audio:** Mensajes de voz mediante Whisper
+- ✅ **WhisperService:** Integración con servicio Whisper ASR
+- ✅ **Fallback robusto:** Intenta dos endpoints (/asr y /v1/audio/transcriptions)
+- ✅ **Manejo de errores:** Mensajes claros cuando Whisper no está disponible
+- ✅ **Indicadores visuales:** 🎙 grabando → ✏️ escribiendo
+- ✅ **Limpieza automática:** Archivos temporales eliminados después de transcripción
+
 ## 🏗️ Arquitectura
 
 ```
@@ -103,6 +119,9 @@ pnpm test:coverage
 - `ANTHROPIC_API_KEY`: API key de Anthropic
 - `GEMINI_API_KEY`: API key de Google Gemini
 - `OLLAMA_BASE_URL`: URL de Ollama (opcional)
+- `WHISPER_URL`: URL del servicio Whisper (default: http://localhost:9000)
+- `WHISPER_MODEL`: Modelo Whisper (default: base)
+- `WHISPER_LANGUAGE`: Idioma de transcripción (default: es)
 
 ### Modos de Operación
 
@@ -234,6 +253,53 @@ Soporta 40+ países con sus zonas horarias principales:
 
 Fallback a UTC si no se reconoce el país.
 
+## 🎙️ Sistema de Transcripción de Audio (Fase 5)
+
+AridV2 ahora acepta **mensajes de voz** que transcribe automáticamente usando Whisper.
+
+### ¿Cómo funciona?
+
+1. **Envía mensaje de voz:** Graba y envía un mensaje de voz por Telegram
+2. **Indicador visual:** Verás el indicador "🎙 grabando..."
+3. **Transcripción automática:** Whisper transcribe el audio a texto
+4. **Procesamiento:** El texto se procesa como un mensaje normal
+5. **Respuesta:** Recibes la respuesta formateada
+
+### Configuración de Whisper
+
+AridV2 requiere un servicio Whisper corriendo en Docker:
+
+```bash
+# Docker Compose (recomendado)
+services:
+  whisper:
+    image: onerahmet/openai-whisper-asr-webservice:latest
+    container_name: whisper
+    restart: always
+    ports:
+      - "9000:9000"
+    environment:
+      - ASR_MODEL=base  # tiny, base, small, medium, large
+      - ASR_ENGINE=faster_whisper
+
+# Iniciar servicio
+docker-compose up -d whisper
+```
+
+### Manejo de errores
+
+Si Whisper no está disponible, recibirás un mensaje claro:
+```
+[Audio recibido - Whisper no disponible. Inicia el servicio en http://localhost:9000]
+```
+
+### Ventajas
+
+- ✅ **Manos libres:** Habla en lugar de escribir
+- ✅ **Natural:** Más rápido para conversaciones largas
+- ✅ **Accesible:** Mejor experiencia para usuarios con limitaciones de escritura
+- ✅ **Robusto:** Fallback entre endpoints si uno falla
+
 ## 🏛️ Estructura del Proyecto
 
 ```
@@ -248,8 +314,14 @@ src/
 │   ├── context-provider.ts  # Proveedor de contexto
 │   ├── timezone-utils.ts    # Utilidades de timezone
 │   └── types.ts             # Interfaces
+├── transcription/      # Transcripción de audio
+│   └── whisper.service.ts   # Servicio Whisper
 ├── senses/telegram/    # Interfaz Telegram
-├── hands/              # Tools (vacío en Fases 1-3)
+│   ├── bot.ts          # Setup del bot
+│   ├── handlers.ts     # Handlers (text + voice)
+│   ├── formatter.ts    # Formateo MarkdownV2
+│   └── markdown-translator.ts  # Traductor Markdown
+├── hands/              # Tools (vacío en Fases 1-5)
 ├── llm/                # Multi-provider LLM
 ├── storage/            # Persistencia JSON
 │   ├── conversation.store.ts
@@ -275,18 +347,20 @@ AridV2 incorpora mejoras basadas en V1:
 
 ## 📊 Métricas
 
-**Fase 3 (Actual):**
-- **Líneas de código:** ~2,400 (vs 8,000 en V1)
+**Fase 5 (Actual):**
+- **Líneas de código:** ~4,100 (vs 8,000 en V1)
 - **System prompt:** <800 tokens (base + memorias + contexto)
 - **Memoria:** 40 mensajes + memorias de largo plazo
-- **Costo estimado:** ~$0.00125/mensaje (hybrid mode)
-- **Módulos:** 6 (brain, context, llm, storage, senses, onboarding)
-- **Archivos fuente:** 28
+- **Costo estimado:** ~$0.00125/mensaje (hybrid mode, sin cambio)
+- **Módulos:** 7 (brain, context, transcription, llm, storage, senses, onboarding)
+- **Archivos fuente:** 30
 
 **Evolución de costos:**
 - Fase 1: ~$0.001/mensaje (conversación básica)
 - Fase 2: ~$0.0012/mensaje (+20% por memorias)
 - Fase 3: ~$0.00125/mensaje (+4% por contexto temporal/espacial)
+- Fase 4: ~$0.00125/mensaje (sin cambio, mejora UX)
+- Fase 5: ~$0.00125/mensaje (sin cambio, Whisper es gratis/local)
 
 ## 🛣️ Roadmap
 
@@ -309,15 +383,25 @@ AridV2 incorpora mejoras basadas en V1:
 - ✅ Respuestas contextuales adaptativas
 - ✅ Soporte de timezones IANA
 
-### Fase 4 (Futuro)
+### Fase 4 ✅ (Completada)
+- ✅ Formato MarkdownV2 para Telegram
+- ✅ Traductor seguro de Markdown
+- ✅ Fallback automático a texto plano
+
+### Fase 5 ✅ (Completada)
+- ✅ Transcripción de audio con Whisper
+- ✅ Manejo robusto de mensajes de voz
+- ✅ Indicadores visuales y UX mejorada
+
+### Fase 6 (Futuro)
 - 🔜 Herramientas básicas (filesystem, shell, search)
 - 🔜 Sistema de skills
 
-### Fase 5 (Futuro)
+### Fase 7 (Futuro)
 - 🔜 Compresión de memoria
 - 🔜 Memoria semántica con embeddings
 
-### Fase 6 (Futuro)
+### Fase 8 (Futuro)
 - 🔜 Capabilities avanzadas (calendar, automation, learning)
 
 ## 📝 Licencia

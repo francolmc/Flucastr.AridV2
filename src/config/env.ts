@@ -51,6 +51,11 @@ export function loadConfig(): Config {
   const storePath = process.env.STORE_PATH || './data/store.json';
   const workspacePath = process.env.WORKSPACE_PATH || './workspace';
 
+  // Whisper
+  const whisperUrl = process.env.WHISPER_URL || 'http://localhost:9000';
+  const whisperModel = process.env.WHISPER_MODEL || 'base';
+  const whisperLanguage = process.env.WHISPER_LANGUAGE || 'es';
+
   return {
     telegram: {
       botToken: telegramBotToken,
@@ -77,6 +82,11 @@ export function loadConfig(): Config {
     storage: {
       storePath,
       workspacePath,
+    },
+    whisper: {
+      url: whisperUrl,
+      model: whisperModel,
+      language: whisperLanguage,
     },
   };
 }

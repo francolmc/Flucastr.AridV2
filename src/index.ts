@@ -45,7 +45,7 @@ async function main() {
     logger.info('Onboarding service initialized');
 
     // 6. Initialize Telegram Bot
-    const telegramBot = new TelegramBot(config.telegram, brain, onboardingService);
+    const telegramBot = new TelegramBot(config.telegram, brain, onboardingService, config.whisper);
     logger.info('Telegram bot initialized');
 
     // 7. Start bot

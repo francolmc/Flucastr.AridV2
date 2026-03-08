@@ -7,17 +7,20 @@ import { Brain } from '../../brain/brain.js';
 import { OnboardingService } from '../../onboarding/onboarding.service.js';
 import { ProfileStore } from '../../storage/profile.store.js';
 import { TelegramFormatter } from './formatter.js';
+import { WhisperService } from '../../transcription/whisper.service.js';
 import { logger } from '../../utils/logger.js';
 
 export class TelegramHandlers {
   private brain: Brain;
   private onboardingService: OnboardingService;
   private profileStore: ProfileStore;
+  private whisperService: WhisperService;
 
-  constructor(brain: Brain, onboardingService: OnboardingService) {
+  constructor(brain: Brain, onboardingService: OnboardingService, whisperService: WhisperService) {
     this.brain = brain;
     this.onboardingService = onboardingService;
     this.profileStore = new ProfileStore();
+    this.whisperService = whisperService;
   }
 
   /**
@@ -184,6 +187,85 @@ Puedo ayudarte con:
     } catch (error) {
       logger.error('Error in /memories handler', error);
       await ctx.reply('Error al obtener las memorias. Intenta de nuevo.');
+    }
+  }
+
+  /**
+   * Handle voice messages
+   */
+  async handleVoiceMessage(ctx: Context): Promise<void> {
+    const userId = ctx.from?.id.toString();
+    if (!userId) return;
+
+    try {
+      // Check if voice message exists
+      const voice = (ctx.message as any)?.voice;
+      if (!voice) {
+        await ctx.reply('No se detectó mensaje de voz.');
+        return;
+      }
+
+      // Show "recording voice" indicator
+      await ctx.sendChatAction('record_voice');
+      logger.info(`🎤 Processing voice message from user ${userId}`);
+
+      // Download audio file from Telegram
+      const file = await ctx.telegram.getFile(voice.file_id);
+      const fileUrl = `https://api.telegram.org/file/bot${ctx.telegram.token}/${file.file_path}`;
+
+      logger.debug(`Downloading audio from: ${fileUrl}`);
+      const response = await fetch(fileUrl);
+
+      if (!response.ok) {
+        throw new Error(`Failed to download audio: ${response.status}`);
+      }
+
+      const audioBuffer = Buffer.from(await response.arrayBuffer());
+      logger.info(`Audio downloaded: ${audioBuffer.length} bytes, duration: ${voice.duration}s`);
+
+      // Transcribe audio
+      const transcription = await this.whisperService.transcribe(audioBuffer, 'voice.ogg');
+
+      // Check if transcription failed
+      if (transcription.startsWith('[')) {
+        await ctx.reply(transcription); // Send error message
+        return;
+      }
+
+      if (!transcription || transcription.trim() === '') {
+        await ctx.reply('❌ No se pudo transcribir el audio. Intenta de nuevo.');
+        return;
+      }
+
+      logger.info(`Transcription: "${transcription}"`);
+
+      // Show "typing" indicator (user will see bot is processing)
+      await ctx.sendChatAction('typing');
+
+      // Process transcription as regular text message
+      const botResponse = await this.brain.processMessage(userId, transcription);
+
+      // Format and send response
+      const formatted = TelegramFormatter.toTelegramMarkdown(botResponse);
+      const chunks = TelegramFormatter.splitMessage(formatted);
+
+      for (const chunk of chunks) {
+        try {
+          await ctx.reply(chunk, { parse_mode: 'MarkdownV2' });
+        } catch (error: any) {
+          if (error?.response?.error_code === 400) {
+            logger.warn('MarkdownV2 parse error, falling back to plain text');
+            const plainChunk = TelegramFormatter.toPlainText(chunk);
+            await ctx.reply(plainChunk);
+          } else {
+            throw error;
+          }
+        }
+      }
+
+    } catch (error) {
+      logger.error('Error handling voice message', error);
+      await ctx.reply('Lo siento, ocurrió un error al procesar el audio. Intenta de nuevo.');
     }
   }
 

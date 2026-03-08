@@ -35,7 +35,7 @@ describe('SystemPromptBuilder', () => {
     expect(prompt).toContain('formal');
   });
 
-  test('should generate prompt under 500 tokens', () => {
+  test('should generate prompt under 1000 tokens', () => {
     const profile: Profile = {
       userId: 'test-user',
       agentName: 'Arid',
@@ -47,7 +47,8 @@ describe('SystemPromptBuilder', () => {
     const prompt = SystemPromptBuilder.build(profile);
     const estimatedTokens = SystemPromptBuilder.estimateTokens(prompt);
 
-    expect(estimatedTokens).toBeLessThan(500);
+    // System prompt includes EMOCIONALIDAD section which adds ~400 tokens
+    expect(estimatedTokens).toBeLessThan(1000);
   });
 
   test('should support different tones', () => {

@@ -6,6 +6,7 @@ export interface Config {
   telegram: TelegramConfig;
   llm: LLMConfig;
   storage: StorageConfig;
+  whisper: WhisperConfig;
 }
 
 export interface TelegramConfig {
@@ -35,6 +36,12 @@ export interface LLMConfig {
 export interface StorageConfig {
   storePath: string;
   workspacePath: string;
+}
+
+export interface WhisperConfig {
+  url: string;
+  model: string;
+  language: string;
 }
 
 export interface LLMMessage {

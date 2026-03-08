@@ -7,7 +7,8 @@ import { Telegraf } from 'telegraf';
 import { TelegramHandlers } from './handlers.js';
 import { Brain } from '../../brain/brain.js';
 import { OnboardingService } from '../../onboarding/onboarding.service.js';
-import { TelegramConfig } from '../../config/types.js';
+import { WhisperService } from '../../transcription/whisper.service.js';
+import { TelegramConfig, WhisperConfig } from '../../config/types.js';
 import { logger } from '../../utils/logger.js';
 import { TelegramError } from '../../utils/errors.js';
 
@@ -19,10 +20,19 @@ export class TelegramBot {
   constructor(
     config: TelegramConfig,
     brain: Brain,
-    onboardingService: OnboardingService
+    onboardingService: OnboardingService,
+    whisperConfig: WhisperConfig
   ) {
     this.bot = new Telegraf(config.botToken);
-    this.handlers = new TelegramHandlers(brain, onboardingService);
+
+    // Initialize WhisperService
+    const whisperService = new WhisperService(
+      whisperConfig.url,
+      whisperConfig.model,
+      whisperConfig.language
+    );
+
+    this.handlers = new TelegramHandlers(brain, onboardingService, whisperService);
     this.allowedUserIds = new Set(config.allowedUserIds);
 
     this.setupMiddleware();
@@ -79,6 +89,9 @@ export class TelegramBot {
 
     // Text messages
     this.bot.on('text', (ctx) => this.handlers.handleMessage(ctx));
+
+    // Voice messages
+    this.bot.on('voice', (ctx) => this.handlers.handleVoiceMessage(ctx));
 
     // Error handler
     this.bot.catch((error, ctx) => this.handlers.handleError(error, ctx));
