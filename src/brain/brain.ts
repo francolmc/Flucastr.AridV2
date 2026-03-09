@@ -16,6 +16,7 @@ import { ProspectiveMemoryExtractor } from './prospective-memory-extractor.js';
 import { ProspectiveCommandAnalyzer } from './prospective-command-analyzer.js';
 import { ContextProvider } from '../context/context-provider.js';
 import { LLMMessage } from '../config/types.js';
+import { detectImageMimeType } from '../hands/mime-types.js';
 import { logger } from '../utils/logger.js';
 import { ToolsAnalyzer } from '../hands/tools-analyzer.js';
 import { ToolExecutor } from '../hands/tool-executor.js';
@@ -72,8 +73,19 @@ export class Brain {
   /**
    * Process a user message and generate a response
    * May return a tool confirmation request or a string response
+   *
+   * @param options - Optional parameters:
+   *   - imageUrl: Path to image file for vision analysis (Fase 8)
+   *   - documentPath: Path to document file (Fase 8)
    */
-  async processMessage(userId: string, text: string): Promise<string | { requiresConfirmation: true; request: ToolActionRequest }> {
+  async processMessage(
+    userId: string,
+    text: string,
+    options?: {
+      imageUrl?: string;
+      documentPath?: string;
+    }
+  ): Promise<string | { requiresConfirmation: true; request: ToolActionRequest }> {
     const timestamp = Date.now();
 
     try {
@@ -229,14 +241,56 @@ export class Brain {
       // 11. Build system prompt with memories, context, and prospectives
       const systemPrompt = SystemPromptBuilder.build(profile, memories, context, prospectives);
 
-      // 12. Prepare messages for LLM
-      const messages: LLMMessage[] = [
-        ...history.map(h => ({
-          role: h.role,
-          content: h.content
-        })),
-        { role: 'user' as const, content: text }
-      ];
+      // 12. Prepare messages for LLM (with optional image support - Fase 8)
+      let messages: LLMMessage[] = [];
+
+      if (options?.imageUrl) {
+        // PASO 8 NUEVO: Multimodal message with image
+        const fs = await import('fs/promises');
+        const imageBuffer = await fs.readFile(options.imageUrl);
+        const base64Image = imageBuffer.toString('base64');
+        const mimeType = this.getImageMimeType(options.imageUrl);
+
+        logger.info('Processing message with image', {
+          userId,
+          imagePath: options.imageUrl,
+          mimeType
+        });
+
+        // Construct multimodal message
+        messages = [
+          ...history.map(h => ({
+            role: h.role,
+            content: h.content
+          })),
+          {
+            role: 'user' as const,
+            content: [
+              {
+                type: 'image' as const,
+                source: {
+                  type: 'base64' as const,
+                  media_type: mimeType,
+                  data: base64Image
+                }
+              },
+              {
+                type: 'text' as const,
+                text: text
+              }
+            ]
+          }
+        ];
+      } else {
+        // Normal text-only message
+        messages = [
+          ...history.map(h => ({
+            role: h.role,
+            content: h.content
+          })),
+          { role: 'user' as const, content: text }
+        ];
+      }
 
       // 13. Generate response
       const response = await provider.generateContent(messages, systemPrompt);
@@ -503,5 +557,12 @@ export class Brain {
         });
       }
     }
+  }
+
+  /**
+   * Get image MIME type (centralized, Fase 8)
+   */
+  private getImageMimeType(filePath: string): 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp' {
+    return detectImageMimeType(filePath);
   }
 }

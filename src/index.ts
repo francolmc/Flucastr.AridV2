@@ -46,8 +46,14 @@ async function main() {
     const onboardingService = new OnboardingService(config.storage.workspacePath);
     logger.info('Onboarding service initialized');
 
-    // 6. Initialize Telegram Bot
-    const telegramBot = new TelegramBot(config.telegram, brain, onboardingService, config.whisper);
+    // 6. Initialize Telegram Bot (with storage config for Fase 8)
+    const telegramBot = new TelegramBot(
+      config.telegram,
+      brain,
+      onboardingService,
+      config.whisper,
+      config.storage
+    );
     logger.info('Telegram bot initialized');
 
     // 7. Start bot

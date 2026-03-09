@@ -73,6 +73,18 @@
 - ✅ **Seguridad Extrema:** Lista negra, validación de paths, timeouts, sanitización
 - ✅ **Sandbox Estricto:** Solo opera dentro del workspace del proyecto
 
+### Fase 8 ✅ (Completada) - **VISIÓN Y GESTIÓN DE ARCHIVOS**
+
+- ✅ **Visión AI:** Ver y entender imágenes con Claude/Gemini Vision
+- ✅ **Recepción de Archivos:** Fotos, documentos, videos desde Telegram
+- ✅ **Gestión Automática:** Archivos guardados en `uploads/[userId]/`
+- ✅ **Análisis de Imágenes:** Descripción, OCR, clasificación, detección de objetos
+- ✅ **Razonamiento Visual:** Decisiones inteligentes sobre qué hacer con imágenes
+- ✅ **Multimodal LLM:** Mensajes con texto + imágenes combinados
+- ✅ **Metadata Store:** Registro de archivos subidos (tamaño, tipo, dimensiones)
+- ✅ **Validación de Archivos:** Límite 20MB, MIME types, path safety
+- ✅ **Backward Compatible:** Mensajes texto-only siguen funcionando igual
+
 ## 🏗️ Arquitectura
 
 ```
@@ -87,17 +99,23 @@ AridV2
 │   ├── ContextProvider   - Obtención de contexto temporal/espacial
 │   └── TimezoneUtils     - Utilidades de timezone y formateo
 ├── Senses (Sentidos)     - Inputs (Telegram + Whisper)
-├── Hands (Manos)         - Tools (NUEVO en Fase 7)
+├── Hands (Manos)         - Tools + File Management (Fase 7 & 8)
 │   ├── ToolExecutor      - Orquestador de herramientas
 │   ├── CommandExecutor   - Ejecuta comandos shell seguros
 │   ├── FileManager       - Operaciones de archivos
 │   ├── WebSearcher       - Búsqueda web (Tavily API)
 │   ├── ToolActionsStore  - Solicitudes pendientes
+│   ├── FileUploadManager - Descarga y gestión de archivos de Telegram
+│   ├── ImageAnalyzer     - Análisis de imágenes con Vision AI
 │   └── SecurityValidator - Validaciones centralizadas
-├── LLM Layer            - Multi-provider abstraction
-├── Storage              - JSON-based (historial, perfiles, tokens, memorias, prospectives, toolActions)
+├── LLM Layer            - Multi-provider abstraction (with Vision support)
+│   ├── AnthropicProvider - Claude con soporte multimodal
+│   ├── GeminiProvider    - Gemini con soporte de imágenes
+│   └── OllamaProvider    - Local LLM (solo texto)
+├── Storage              - JSON-based (historial, perfiles, tokens, memorias, prospectives, toolActions, uploadedFiles)
 │   ├── ConversationStore - Últimos 40 mensajes
 │   ├── ProfileStore      - Perfil del usuario (+ ubicación)
+│   ├── UploadedFilesStore - Metadata de archivos subidos (Fase 8)
 │   ├── MemoryStore       - Memorias de largo plazo
 │   └── ProspectiveMemoryStore - Intenciones futuras
 └── Onboarding           - Setup inicial (5 preguntas)

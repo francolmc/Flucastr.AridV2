@@ -50,9 +50,27 @@ export interface ToolsConfig {
   tavilyApiKey?: string;
 }
 
+/**
+ * Content block for multimodal messages (Fase 8)
+ */
+export type ContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'image'; source: ImageSource };
+
+/**
+ * Image source for vision capabilities (Fase 8)
+ */
+export type ImageSource =
+  | { type: 'base64'; media_type: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'; data: string }
+  | { type: 'url'; url: string };
+
+/**
+ * LLM Message - Now supports multimodal content (Fase 8)
+ * Backward compatible: content can be string or ContentBlock[]
+ */
 export interface LLMMessage {
   role: 'user' | 'assistant';
-  content: string;
+  content: string | ContentBlock[];  // ← Extended for multimodal
 }
 
 export interface LLMResponse {
@@ -198,4 +216,26 @@ export interface ProspectiveMemory {
   completedAt?: Date;
   lastMentioned?: Date;          // Última vez que el asistente lo mencionó
   mentionCount: number;          // Cuántas veces se mencionó
+}
+
+/**
+ * Uploaded File metadata (Fase 8)
+ */
+export type FileType = 'photo' | 'document' | 'video' | 'audio';
+
+export interface UploadedFile {
+  id: string;                    // UUID
+  userId: string;                // Usuario owner
+  filename: string;              // Nombre original del archivo
+  path: string;                  // Ruta en disco: uploads/[userId]/file.ext
+  type: FileType;                // Tipo de archivo
+  mimeType: string;              // application/pdf, image/jpeg, etc.
+  size: number;                  // Tamaño en bytes
+  uploadedAt: Date;              // Cuándo se subió
+  metadata?: {
+    width?: number;              // Para imágenes
+    height?: number;             // Para imágenes
+    duration?: number;           // Para videos/audio (en segundos)
+    thumbnailPath?: string;      // Para videos
+  };
 }

@@ -26,11 +26,38 @@ export class AnthropicProvider implements LLMProvider {
     systemPrompt?: string
   ): Promise<LLMResponse> {
     try {
-      // Format messages for Anthropic API
-      const anthropicMessages = messages.map(msg => ({
-        role: msg.role,
-        content: msg.content
-      }));
+      // Format messages for Anthropic API (with multimodal support)
+      const anthropicMessages = messages.map(msg => {
+        // Backward compatible: if content is string, keep as is
+        if (typeof msg.content === 'string') {
+          return {
+            role: msg.role,
+            content: msg.content
+          };
+        }
+
+        // Multimodal: process content blocks
+        const content = msg.content.map(block => {
+          if (block.type === 'text') {
+            return {
+              type: 'text' as const,
+              text: block.text
+            };
+          }
+          if (block.type === 'image') {
+            return {
+              type: 'image' as const,
+              source: block.source
+            };
+          }
+          return block;
+        });
+
+        return {
+          role: msg.role,
+          content
+        };
+      });
 
       // Build system configuration with prompt caching
       const systemConfig: Anthropic.Messages.MessageCreateParams['system'] = systemPrompt

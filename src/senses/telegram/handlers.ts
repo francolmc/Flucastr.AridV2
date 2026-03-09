@@ -10,6 +10,7 @@ import { ProfileStore } from '../../storage/profile.store.js';
 import { TelegramFormatter } from './formatter.js';
 import { WhisperService } from '../../transcription/whisper.service.js';
 import { ToolActionRequest } from '../../hands/tool-actions.store.js';
+import { FileUploadManager } from '../../hands/file-upload-manager.js';
 import { logger } from '../../utils/logger.js';
 
 export class TelegramHandlers {
@@ -17,12 +18,19 @@ export class TelegramHandlers {
   private onboardingService: OnboardingService;
   private profileStore: ProfileStore;
   private whisperService: WhisperService;
+  private fileUploadManager: FileUploadManager;
 
-  constructor(brain: Brain, onboardingService: OnboardingService, whisperService: WhisperService) {
+  constructor(
+    brain: Brain,
+    onboardingService: OnboardingService,
+    whisperService: WhisperService,
+    fileUploadManager: FileUploadManager
+  ) {
     this.brain = brain;
     this.onboardingService = onboardingService;
     this.profileStore = new ProfileStore();
     this.whisperService = whisperService;
+    this.fileUploadManager = fileUploadManager;
   }
 
   /**
@@ -918,6 +926,220 @@ Puedo ayudarte con:
     }
 
     await ctx.answerCbQuery('Cancelado');
+  }
+
+  /**
+   * Handle photo uploads (Fase 8)
+   */
+  async handlePhoto(ctx: Context): Promise<void> {
+    const userId = ctx.from?.id.toString();
+    if (!userId) return;
+
+    try {
+      // Get photo of best resolution
+      const photos = (ctx.message as any)?.photo;
+      if (!photos || photos.length === 0) {
+        await ctx.reply('No se pudo procesar la imagen.');
+        return;
+      }
+
+      const bestPhoto = photos[photos.length - 1]; // Last one is highest quality
+
+      // Download and save
+      await ctx.sendChatAction('typing');
+      const upload = await this.fileUploadManager.downloadAndSave(
+        userId,
+        bestPhoto.file_id,
+        `image_${Date.now()}.jpg`,
+        'photo',
+        ctx.telegram,
+        {
+          width: bestPhoto.width,
+          height: bestPhoto.height,
+          mimeType: 'image/jpeg'
+        }
+      );
+
+      logger.info('Photo uploaded', {
+        userId,
+        filename: upload.filename,
+        size: upload.size
+      });
+
+      // Get caption if exists
+      const caption = (ctx.message as any)?.caption;
+
+      if (caption) {
+        // User wants to do something with the image
+        await ctx.sendChatAction('typing');
+
+        const response = await this.brain.processMessage(userId, caption, {
+          imageUrl: upload.path
+        });
+
+        // Handle tool confirmation or normal response
+        if (typeof response === 'object' && response.requiresConfirmation) {
+          await this.sendToolConfirmation(ctx, response.request);
+        } else {
+          const formatted = TelegramFormatter.toTelegramMarkdown(response as string);
+          await ctx.reply(formatted, { parse_mode: 'MarkdownV2' });
+        }
+      } else {
+        // No caption, just confirm save
+        const width = upload.metadata?.width || '?';
+        const height = upload.metadata?.height || '?';
+        const sizeKb = (upload.size / 1024).toFixed(1);
+
+        await ctx.reply(
+          `✅ Imagen guardada\n\n` +
+            `📁 Ubicación: \`uploads/\`\n` +
+            `📊 Tamaño: ${sizeKb} KB\n` +
+            `🖼️ Dimensiones: ${width}x${height}px\n\n` +
+            `¿Qué quieres hacer?\n` +
+            `• Analizar / describir\n` +
+            `• Extraer texto (OCR)\n` +
+            `• Mover a otra carpeta`,
+          { parse_mode: 'Markdown' }
+        );
+      }
+    } catch (error) {
+      logger.error('Error handling photo', error);
+      await ctx.reply('Error procesando la imagen. Intenta de nuevo.');
+    }
+  }
+
+  /**
+   * Handle document uploads (Fase 8)
+   */
+  async handleDocument(ctx: Context): Promise<void> {
+    const userId = ctx.from?.id.toString();
+    if (!userId) return;
+
+    try {
+      const document = (ctx.message as any)?.document;
+      if (!document) {
+        await ctx.reply('No se pudo procesar el documento.');
+        return;
+      }
+
+      // Validate size (max 20MB)
+      if (document.file_size > 20 * 1024 * 1024) {
+        await ctx.reply('❌ Archivo muy grande (máx 20MB)');
+        return;
+      }
+
+      // Download and save
+      await ctx.sendChatAction('upload_document');
+      const upload = await this.fileUploadManager.downloadAndSave(
+        userId,
+        document.file_id,
+        document.file_name,
+        'document',
+        ctx.telegram,
+        {
+          mimeType: document.mime_type
+        }
+      );
+
+      logger.info('Document uploaded', {
+        userId,
+        filename: upload.filename,
+        size: upload.size,
+        mimeType: upload.mimeType
+      });
+
+      const caption = (ctx.message as any)?.caption;
+
+      if (caption) {
+        // Process with brain (context about the document)
+        await ctx.sendChatAction('typing');
+
+        const response = await this.brain.processMessage(userId, caption, {
+          documentPath: upload.path
+        });
+
+        if (typeof response === 'object' && response.requiresConfirmation) {
+          await this.sendToolConfirmation(ctx, response.request);
+        } else {
+          const formatted = TelegramFormatter.toTelegramMarkdown(response as string);
+          await ctx.reply(formatted, { parse_mode: 'MarkdownV2' });
+        }
+      } else {
+        const sizeKb = (document.file_size / 1024).toFixed(1);
+
+        await ctx.reply(
+          `✅ Documento guardado\n\n` +
+            `📄 Nombre: \`${document.file_name}\`\n` +
+            `📊 Tamaño: ${sizeKb} KB\n` +
+            `🏷️ Tipo: ${document.mime_type}\n\n` +
+            `¿Qué quieres hacer?\n` +
+            `• Mover a otra carpeta\n` +
+            `• Dejar aquí`,
+          { parse_mode: 'Markdown' }
+        );
+      }
+    } catch (error) {
+      logger.error('Error handling document', error);
+      await ctx.reply('Error procesando el documento. Intenta de nuevo.');
+    }
+  }
+
+  /**
+   * Handle video uploads (Fase 8)
+   */
+  async handleVideo(ctx: Context): Promise<void> {
+    const userId = ctx.from?.id.toString();
+    if (!userId) return;
+
+    try {
+      const video = (ctx.message as any)?.video;
+      if (!video) {
+        await ctx.reply('No se pudo procesar el video.');
+        return;
+      }
+
+      // Validate size
+      if (video.file_size > 20 * 1024 * 1024) {
+        await ctx.reply('❌ Video muy grande (máx 20MB)');
+        return;
+      }
+
+      await ctx.sendChatAction('upload_video');
+      const upload = await this.fileUploadManager.downloadAndSave(
+        userId,
+        video.file_id,
+        `video_${Date.now()}.mp4`,
+        'video',
+        ctx.telegram,
+        {
+          width: video.width,
+          height: video.height,
+          duration: video.duration,
+          mimeType: video.mime_type
+        }
+      );
+
+      logger.info('Video uploaded', {
+        userId,
+        filename: upload.filename,
+        size: upload.size,
+        duration: upload.metadata?.duration
+      });
+
+      const sizeMb = (upload.size / 1024 / 1024).toFixed(1);
+      const duration = upload.metadata?.duration || '?';
+
+      await ctx.reply(
+        `✅ Video guardado\n\n` +
+          `📁 Ubicación: \`uploads/\`\n` +
+          `📊 Tamaño: ${sizeMb} MB\n` +
+          `⏱️ Duración: ${duration}s`,
+        { parse_mode: 'Markdown' }
+      );
+    } catch (error) {
+      logger.error('Error handling video', error);
+      await ctx.reply('Error procesando el video. Intenta de nuevo.');
+    }
   }
 
   /**

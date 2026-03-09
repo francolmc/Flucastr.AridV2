@@ -52,8 +52,13 @@ export class OllamaProvider implements LLMProvider {
         });
       }
 
-      // Add conversation messages
-      ollamaMessages.push(...messages);
+      // Add conversation messages (extract text from multimodal content)
+      for (const msg of messages) {
+        ollamaMessages.push({
+          role: msg.role,
+          content: this.extractTextFromContent(msg.content)
+        });
+      }
 
       // Call Ollama API
       const response = await fetch(`${this.baseUrl}/api/chat`, {
@@ -119,5 +124,21 @@ export class OllamaProvider implements LLMProvider {
       default:
         return 'end_turn';
     }
+  }
+
+  /**
+   * Extract text from content (multimodal support - Fase 8)
+   * Note: Ollama may not support images yet, so we just extract text
+   */
+  private extractTextFromContent(content: string | any[]): string {
+    if (typeof content === 'string') {
+      return content;
+    }
+
+    // Extract text blocks from multimodal content
+    return content
+      .filter(block => block.type === 'text')
+      .map(block => block.text)
+      .join('\n') || '[Image content - not supported by Ollama]';
   }
 }

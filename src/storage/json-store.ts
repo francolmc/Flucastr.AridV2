@@ -17,6 +17,7 @@ interface StoreData {
   memories: Record<string, any[]>;
   prospective: Record<string, any[]>; // Fase 6: Memoria prospectiva
   toolActions?: any[]; // Fase 7: Tool action requests
+  uploadedFiles?: any[]; // Fase 8: Uploaded file metadata
 }
 
 export class JSONStore {
@@ -58,6 +59,7 @@ export class JSONStore {
       this.data.memories = this.data.memories || {};
       this.data.prospective = this.data.prospective || {};
       this.data.toolActions = this.data.toolActions || [];
+      this.data.uploadedFiles = this.data.uploadedFiles || []; // Fase 8
 
       this.initialized = true;
     } catch (error) {

@@ -8,7 +8,10 @@ import { TelegramHandlers } from './handlers.js';
 import { Brain } from '../../brain/brain.js';
 import { OnboardingService } from '../../onboarding/onboarding.service.js';
 import { WhisperService } from '../../transcription/whisper.service.js';
-import { TelegramConfig, WhisperConfig } from '../../config/types.js';
+import { FileUploadManager } from '../../hands/file-upload-manager.js';
+import { UploadedFilesStore } from '../../storage/uploaded-files.store.js';
+import { JSONStore } from '../../storage/json-store.js';
+import { TelegramConfig, WhisperConfig, StorageConfig } from '../../config/types.js';
 import { logger } from '../../utils/logger.js';
 import { TelegramError } from '../../utils/errors.js';
 
@@ -21,7 +24,8 @@ export class TelegramBot {
     config: TelegramConfig,
     brain: Brain,
     onboardingService: OnboardingService,
-    whisperConfig: WhisperConfig
+    whisperConfig: WhisperConfig,
+    storageConfig: StorageConfig
   ) {
     this.bot = new Telegraf(config.botToken);
 
@@ -32,7 +36,20 @@ export class TelegramBot {
       whisperConfig.language
     );
 
-    this.handlers = new TelegramHandlers(brain, onboardingService, whisperService);
+    // Initialize FileUploadManager (Fase 8)
+    const jsonStore = new JSONStore(storageConfig.storePath);
+    const uploadedFilesStore = new UploadedFilesStore(jsonStore);
+    const fileUploadManager = new FileUploadManager(
+      storageConfig.workspacePath,
+      uploadedFilesStore
+    );
+
+    this.handlers = new TelegramHandlers(
+      brain,
+      onboardingService,
+      whisperService,
+      fileUploadManager
+    );
     this.allowedUserIds = new Set(config.allowedUserIds);
 
     this.setupMiddleware();
@@ -96,6 +113,11 @@ export class TelegramBot {
 
     // Voice messages
     this.bot.on('voice', (ctx) => this.handlers.handleVoiceMessage(ctx));
+
+    // Media uploads (Fase 8)
+    this.bot.on('photo', (ctx) => this.handlers.handlePhoto(ctx));
+    this.bot.on('document', (ctx) => this.handlers.handleDocument(ctx));
+    this.bot.on('video', (ctx) => this.handlers.handleVideo(ctx));
 
     // Callback queries (inline buttons) - Fase 7
     this.bot.on('callback_query', (ctx) => this.handlers.handleCallback(ctx));

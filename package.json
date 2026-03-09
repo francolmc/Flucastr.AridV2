@@ -1,7 +1,7 @@
 {
   "name": "flucastr-arid-v2",
-  "version": "0.7.0",
-  "description": "AridV2 - Asistente Conversacional con Herramientas (Tools)",
+  "version": "0.8.0",
+  "description": "AridV2 - Asistente Conversacional con Visión y Gestión de Archivos",
   "main": "dist/index.js",
   "type": "module",
   "scripts": {

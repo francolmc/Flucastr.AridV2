@@ -31,19 +31,23 @@ export class GeminiProvider implements LLMProvider {
         systemInstruction: systemPrompt
       });
 
-      // Convert messages to Gemini format
-      const history = messages.slice(0, -1).map(msg => ({
-        role: msg.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: msg.content }]
-      }));
+      // Convert messages to Gemini format (with multimodal support)
+      const history = messages.slice(0, -1).map(msg => {
+        const parts = this.convertContentToParts(msg.content);
+        return {
+          role: msg.role === 'assistant' ? 'model' : 'user',
+          parts
+        };
+      });
 
       const lastMessage = messages[messages.length - 1];
+      const lastMessageParts = this.convertContentToParts(lastMessage.content);
 
       // Start chat session
       const chat = model.startChat({ history });
 
-      // Send message
-      const result = await chat.sendMessage(lastMessage.content);
+      // Send message (can be multimodal)
+      const result = await chat.sendMessage(lastMessageParts);
       const response = result.response;
 
       // Extract text
@@ -51,7 +55,7 @@ export class GeminiProvider implements LLMProvider {
 
       // Estimate tokens (Gemini doesn't provide exact token counts in all cases)
       const inputTokens = this.estimateTokens(
-        messages.map(m => m.content).join('\n') + (systemPrompt || '')
+        messages.map(m => this.extractTextFromContent(m.content)).join('\n') + (systemPrompt || '')
       );
       const outputTokens = this.estimateTokens(content);
 
@@ -94,5 +98,46 @@ export class GeminiProvider implements LLMProvider {
       default:
         return 'end_turn';
     }
+  }
+
+  /**
+   * Convert LLMMessage content to Gemini parts format (multimodal support)
+   */
+  private convertContentToParts(content: string | any[]): any[] {
+    // Backward compatible: if string, return text part
+    if (typeof content === 'string') {
+      return [{ text: content }];
+    }
+
+    // Multimodal: process content blocks
+    return content.map(block => {
+      if (block.type === 'text') {
+        return { text: block.text };
+      }
+      if (block.type === 'image' && block.source.type === 'base64') {
+        return {
+          inlineData: {
+            mimeType: block.source.media_type,
+            data: block.source.data
+          }
+        };
+      }
+      // Fallback
+      return { text: '[Unsupported content block]' };
+    });
+  }
+
+  /**
+   * Extract text from content (for token estimation)
+   */
+  private extractTextFromContent(content: string | any[]): string {
+    if (typeof content === 'string') {
+      return content;
+    }
+
+    return content
+      .filter(block => block.type === 'text')
+      .map(block => block.text)
+      .join('\n');
   }
 }

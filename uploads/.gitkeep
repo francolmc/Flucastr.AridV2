@@ -1,0 +1,8 @@
+# Uploads Directory
+
+This directory stores files uploaded by users through Telegram.
+
+Structure:
+- uploads/[userId]/[filename]
+
+Files are automatically organized by user ID to prevent conflicts.
