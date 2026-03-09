@@ -3,11 +3,13 @@
  */
 
 import { Context } from 'telegraf';
+import { Markup } from 'telegraf';
 import { Brain } from '../../brain/brain.js';
 import { OnboardingService } from '../../onboarding/onboarding.service.js';
 import { ProfileStore } from '../../storage/profile.store.js';
 import { TelegramFormatter } from './formatter.js';
 import { WhisperService } from '../../transcription/whisper.service.js';
+import { ToolActionRequest } from '../../hands/tool-actions.store.js';
 import { logger } from '../../utils/logger.js';
 
 export class TelegramHandlers {
@@ -619,8 +621,14 @@ Puedo ayudarte con:
       // Process transcription as regular text message
       const botResponse = await this.brain.processMessage(userId, transcription);
 
+      // Check if response requires tool confirmation
+      if (typeof botResponse === 'object' && botResponse.requiresConfirmation) {
+        await this.sendToolConfirmation(ctx, botResponse.request);
+        return;
+      }
+
       // Format and send response
-      const formatted = TelegramFormatter.toTelegramMarkdown(botResponse);
+      const formatted = TelegramFormatter.toTelegramMarkdown(botResponse as string);
       const chunks = TelegramFormatter.splitMessage(formatted);
 
       for (const chunk of chunks) {
@@ -670,11 +678,28 @@ Puedo ayudarte con:
       // Show typing indicator
       await ctx.sendChatAction('typing');
 
+      // Check if user is trying to clear a stuck pending tool request
+      if (text.toLowerCase().includes('cancel') || text.toLowerCase().includes('cancelar')) {
+        const store = this.brain.getToolActionsStore();
+        const pendingRequest = store.getPendingRequest(userId);
+        if (pendingRequest) {
+          store.rejectRequest(userId, pendingRequest.id);
+          await ctx.reply('🚫 Solicitud de herramienta cancelada. Ahora puedo procesar nuevas solicitudes.');
+          return;
+        }
+      }
+
       // Process message with brain
       const response = await this.brain.processMessage(userId, text);
 
+      // NUEVO: Check if response requires tool confirmation
+      if (typeof response === 'object' && response.requiresConfirmation) {
+        await this.sendToolConfirmation(ctx, response.request);
+        return;
+      }
+
       // Translate to Telegram MarkdownV2
-      const formatted = TelegramFormatter.toTelegramMarkdown(response);
+      const formatted = TelegramFormatter.toTelegramMarkdown(response as string);
 
       // Split long messages if needed
       const chunks = TelegramFormatter.splitMessage(formatted);
@@ -698,6 +723,201 @@ Puedo ayudarte con:
       logger.error('Error handling message', error);
       await ctx.reply('Lo siento, ocurrió un error al procesar tu mensaje. Intenta de nuevo.');
     }
+  }
+
+  /**
+   * Send tool confirmation request with inline buttons (Fase 7)
+   */
+  private async sendToolConfirmation(ctx: Context, request: ToolActionRequest): Promise<void> {
+    const actionNames: Record<string, string> = {
+      read_file: 'Leer archivo',
+      write_file: 'Escribir archivo',
+      list_directory: 'Listar directorio',
+      execute_command: 'Ejecutar comando',
+      web_search: 'Búsqueda web'
+    };
+
+    const actionName = actionNames[request.action] || request.action;
+
+    const message =
+      `🔧 **Solicitud de Herramienta**\n\n` +
+      `**Acción:** ${actionName}\n` +
+      `**Recurso:** \`${request.targetResource}\`\n\n` +
+      `**Descripción:**\n${request.description}\n\n` +
+      `¿Deseas ejecutar esta acción?`;
+
+    try {
+      await ctx.reply(message, {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+          [
+            Markup.button.callback('✅ Aprobar', `tool_approve:${request.id}`),
+            Markup.button.callback('🚫 Cancelar', `tool_reject:${request.id}`)
+          ]
+        ])
+      });
+    } catch (error) {
+      logger.error('Error sending tool confirmation', { error });
+      // Fallback sin markdown
+      await ctx.reply(
+        `🔧 Solicitud de Herramienta\n\n` +
+        `Acción: ${actionName}\n` +
+        `Recurso: ${request.targetResource}\n\n` +
+        `Descripción:\n${request.description}\n\n` +
+        `¿Deseas ejecutar esta acción?`,
+        Markup.inlineKeyboard([
+          [
+            Markup.button.callback('✅ Aprobar', `tool_approve:${request.id}`),
+            Markup.button.callback('🚫 Cancelar', `tool_reject:${request.id}`)
+          ]
+        ])
+      );
+    }
+  }
+
+  /**
+   * Handle callback query from inline buttons (Fase 7)
+   */
+  async handleCallback(ctx: Context): Promise<void> {
+    const callbackQuery = (ctx as any).callbackQuery;
+    const userId = ctx.from?.id.toString();
+
+    if (!userId || !callbackQuery?.data) {
+      await ctx.answerCbQuery('Error: datos inválidos');
+      return;
+    }
+
+    const data = callbackQuery.data as string;
+    const [action, requestId] = data.split(':');
+
+    try {
+      if (action === 'tool_approve') {
+        await this.handleToolApproval(ctx, userId, requestId);
+      } else if (action === 'tool_reject') {
+        await this.handleToolRejection(ctx, userId, requestId);
+      } else {
+        await ctx.answerCbQuery('Acción desconocida');
+      }
+    } catch (error: any) {
+      logger.error('Error handling callback', { error, action, requestId });
+      await ctx.answerCbQuery('Error procesando la acción');
+      await ctx.reply(`❌ Error: ${error.message || 'Error desconocido'}`);
+    }
+  }
+
+  /**
+   * Handle tool approval (Fase 7)
+   */
+  private async handleToolApproval(ctx: Context, userId: string, requestId: string): Promise<void> {
+    const store = this.brain.getToolActionsStore();
+    const executor = this.brain.getToolExecutor();
+
+    // Get request
+    const request = store.getRequest(requestId);
+    if (!request) {
+      await ctx.answerCbQuery('Solicitud no encontrada');
+      return;
+    }
+
+    // Approve request
+    store.approveRequest(userId, requestId);
+
+    // Edit message to show approval
+    try {
+      await ctx.editMessageText(
+        `✅ **Aprobado**\n\n${request.description}\n\n_Ejecutando..._`,
+        { parse_mode: 'Markdown' }
+      );
+    } catch {
+      // Fallback sin markdown
+      await ctx.editMessageText(
+        `✅ Aprobado\n\n${request.description}\n\nEjecutando...`
+      );
+    }
+
+    await ctx.answerCbQuery('Ejecutando...');
+
+    // Execute tool
+    const startTime = Date.now();
+    const result = await executor.execute(
+      request.action,
+      request.targetResource,
+      request.parameters
+    );
+
+    // Mark as executed
+    store.markExecuted(userId, requestId, result.output);
+
+    // Send result
+    if (result.success) {
+      const resultMessage = `✅ **Ejecutado exitosamente**\n\nDuración: ${result.durationMs}ms\n\n\`\`\`\n${result.output}\n\`\`\``;
+
+      try {
+        await ctx.reply(resultMessage, { parse_mode: 'Markdown' });
+      } catch {
+        // Fallback sin markdown
+        await ctx.reply(`✅ Ejecutado exitosamente\n\nDuración: ${result.durationMs}ms\n\n${result.output}`);
+      }
+
+      // Process result with LLM for contextual explanation
+      await ctx.sendChatAction('typing');
+
+      const contextualResponse = await this.brain.processMessage(
+        userId,
+        `[RESULTADO DE HERRAMIENTA]\nAcción: ${request.action}\nResultado:\n${result.output}\n\nExplica brevemente qué obtuvimos y cómo responde a mi solicitud original.`
+      );
+
+      // Only format and send if it's a string response (not another tool request)
+      if (typeof contextualResponse === 'string') {
+        const formatted = TelegramFormatter.toTelegramMarkdown(contextualResponse);
+
+        try {
+          await ctx.reply(formatted, { parse_mode: 'MarkdownV2' });
+        } catch {
+          await ctx.reply(TelegramFormatter.toPlainText(formatted));
+        }
+      }
+    } else {
+      const errorMessage = `❌ **Error ejecutando**\n\n${result.output}`;
+
+      try {
+        await ctx.reply(errorMessage, { parse_mode: 'Markdown' });
+      } catch {
+        await ctx.reply(`❌ Error ejecutando\n\n${result.output}`);
+      }
+    }
+  }
+
+  /**
+   * Handle tool rejection (Fase 7)
+   */
+  private async handleToolRejection(ctx: Context, userId: string, requestId: string): Promise<void> {
+    const store = this.brain.getToolActionsStore();
+
+    // Get request
+    const request = store.getRequest(requestId);
+    if (!request) {
+      await ctx.answerCbQuery('Solicitud no encontrada');
+      return;
+    }
+
+    // Reject request
+    store.rejectRequest(userId, requestId);
+
+    // Edit message to show rejection
+    try {
+      await ctx.editMessageText(
+        `🚫 **Cancelado**\n\n${request.description}\n\n_No se ejecutó ninguna acción._`,
+        { parse_mode: 'Markdown' }
+      );
+    } catch {
+      // Fallback sin markdown
+      await ctx.editMessageText(
+        `🚫 Cancelado\n\n${request.description}\n\nNo se ejecutó ninguna acción.`
+      );
+    }
+
+    await ctx.answerCbQuery('Cancelado');
   }
 
   /**

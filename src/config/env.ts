@@ -56,6 +56,10 @@ export function loadConfig(): Config {
   const whisperModel = process.env.WHISPER_MODEL || 'base';
   const whisperLanguage = process.env.WHISPER_LANGUAGE || 'es';
 
+  // Tools
+  const toolsWorkspacePath = process.env.TOOLS_WORKSPACE_PATH || process.cwd();
+  const tavilyApiKey = process.env.TAVILY_API_KEY;
+
   return {
     telegram: {
       botToken: telegramBotToken,
@@ -87,6 +91,10 @@ export function loadConfig(): Config {
       url: whisperUrl,
       model: whisperModel,
       language: whisperLanguage,
+    },
+    tools: {
+      workspacePath: toolsWorkspacePath,
+      tavilyApiKey,
     },
   };
 }

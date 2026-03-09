@@ -36,7 +36,9 @@ async function main() {
     const brain = new Brain({
       conversationProvider: providers.conversation,
       reasoningProvider: providers.reasoning,
-      analyzerProvider: providers.analyzer
+      analyzerProvider: providers.analyzer,
+      workspacePath: config.tools.workspacePath,
+      tavilyApiKey: config.tools.tavilyApiKey
     });
     logger.info('Brain initialized');
 

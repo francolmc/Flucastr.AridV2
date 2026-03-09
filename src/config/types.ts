@@ -7,6 +7,7 @@ export interface Config {
   llm: LLMConfig;
   storage: StorageConfig;
   whisper: WhisperConfig;
+  tools: ToolsConfig;
 }
 
 export interface TelegramConfig {
@@ -42,6 +43,11 @@ export interface WhisperConfig {
   url: string;
   model: string;
   language: string;
+}
+
+export interface ToolsConfig {
+  workspacePath: string;
+  tavilyApiKey?: string;
 }
 
 export interface LLMMessage {

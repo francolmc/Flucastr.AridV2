@@ -16,6 +16,7 @@ interface StoreData {
   tokens: Record<string, any[]>;
   memories: Record<string, any[]>;
   prospective: Record<string, any[]>; // Fase 6: Memoria prospectiva
+  toolActions?: any[]; // Fase 7: Tool action requests
 }
 
 export class JSONStore {
@@ -25,7 +26,8 @@ export class JSONStore {
     onboarding: {},
     tokens: {},
     memories: {},
-    prospective: {}
+    prospective: {},
+    toolActions: []
   };
   private filePath: string;
   private initialized = false;
@@ -55,6 +57,7 @@ export class JSONStore {
       this.data.tokens = this.data.tokens || {};
       this.data.memories = this.data.memories || {};
       this.data.prospective = this.data.prospective || {};
+      this.data.toolActions = this.data.toolActions || [];
 
       this.initialized = true;
     } catch (error) {
@@ -326,6 +329,16 @@ export class JSONStore {
       );
       this.saveSync();
     }
+  }
+
+  // Generic read/write methods (for ToolActionsStore)
+  read(): StoreData {
+    return this.data;
+  }
+
+  write(data: StoreData): void {
+    this.data = data;
+    this.saveSync();
   }
 }
 

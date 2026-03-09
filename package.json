@@ -1,7 +1,7 @@
 {
   "name": "flucastr-arid-v2",
-  "version": "0.6.0",
-  "description": "AridV2 - Asistente Conversacional con Memoria Prospectiva",
+  "version": "0.7.0",
+  "description": "AridV2 - Asistente Conversacional con Herramientas (Tools)",
   "main": "dist/index.js",
   "type": "module",
   "scripts": {

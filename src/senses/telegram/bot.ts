@@ -97,6 +97,9 @@ export class TelegramBot {
     // Voice messages
     this.bot.on('voice', (ctx) => this.handlers.handleVoiceMessage(ctx));
 
+    // Callback queries (inline buttons) - Fase 7
+    this.bot.on('callback_query', (ctx) => this.handlers.handleCallback(ctx));
+
     // Error handler
     this.bot.catch((error, ctx) => this.handlers.handleError(error, ctx));
   }

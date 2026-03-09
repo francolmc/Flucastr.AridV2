@@ -17,11 +17,16 @@ import { ProspectiveCommandAnalyzer } from './prospective-command-analyzer.js';
 import { ContextProvider } from '../context/context-provider.js';
 import { LLMMessage } from '../config/types.js';
 import { logger } from '../utils/logger.js';
+import { ToolsAnalyzer } from '../hands/tools-analyzer.js';
+import { ToolExecutor } from '../hands/tool-executor.js';
+import { ToolActionsStore, ToolActionRequest } from '../hands/tool-actions.store.js';
 
 export interface BrainConfig {
   conversationProvider: LLMProvider;
   reasoningProvider: LLMProvider;
   analyzerProvider: LLMProvider;
+  workspacePath: string;
+  tavilyApiKey?: string;
 }
 
 export class Brain {
@@ -31,6 +36,9 @@ export class Brain {
   private memoryExtractor: MemoryExtractor;
   private prospectiveExtractor: ProspectiveMemoryExtractor;
   private prospectiveCommandAnalyzer: ProspectiveCommandAnalyzer;
+  private toolsAnalyzer: ToolsAnalyzer;
+  private toolExecutor: ToolExecutor;
+  private toolActionsStore: ToolActionsStore;
   private conversationStore: ConversationStore;
   private profileStore: ProfileStore;
   private memoryStore: MemoryStore;
@@ -44,22 +52,28 @@ export class Brain {
     this.memoryExtractor = new MemoryExtractor(config.analyzerProvider);
     this.prospectiveExtractor = new ProspectiveMemoryExtractor(config.analyzerProvider);
     this.prospectiveCommandAnalyzer = new ProspectiveCommandAnalyzer();
+    this.toolsAnalyzer = new ToolsAnalyzer(config.analyzerProvider);
+    this.toolExecutor = new ToolExecutor(config.workspacePath, config.tavilyApiKey);
     this.conversationStore = new ConversationStore();
     this.profileStore = new ProfileStore();
     this.memoryStore = new MemoryStore();
     this.prospectiveStore = new ProspectiveMemoryStore(this.conversationStore.getStore());
+    this.toolActionsStore = new ToolActionsStore(this.conversationStore.getStore());
     this.tokenTracker = new TokenTracker();
 
     logger.info('Brain initialized', {
       conversation: this.conversationProvider.getName(),
-      reasoning: this.reasoningProvider.getName()
+      reasoning: this.reasoningProvider.getName(),
+      workspacePath: config.workspacePath,
+      webSearchEnabled: !!config.tavilyApiKey
     });
   }
 
   /**
    * Process a user message and generate a response
+   * May return a tool confirmation request or a string response
    */
-  async processMessage(userId: string, text: string): Promise<string> {
+  async processMessage(userId: string, text: string): Promise<string | { requiresConfirmation: true; request: ToolActionRequest }> {
     const timestamp = Date.now();
 
     try {
@@ -81,7 +95,62 @@ export class Brain {
       // 6. Update prospective statuses based on current time
       await this.updateProspectiveStatuses(userId, prospectives);
 
-      // 7. Check for prospective commands in conversation (Fase 6 enhancement)
+      // 7. Analyze if message requires tool usage (Fase 7)
+      const toolRequest = await this.toolsAnalyzer.analyzeToolRequest(
+        text,
+        history.slice(-3).map(m => `${m.role}: ${m.content}`)
+      );
+
+      // If tool detected with high confidence
+      if (toolRequest.action && toolRequest.confidence >= 0.7) {
+        logger.info('Tool request detected', {
+          userId,
+          action: toolRequest.action,
+          targetResource: toolRequest.targetResource,
+          requiresConfirmation: toolRequest.requiresConfirmation,
+          confidence: toolRequest.confidence
+        });
+
+        // If requires confirmation, create pending request
+        if (toolRequest.requiresConfirmation) {
+          const request = this.toolActionsStore.createRequest(
+            userId,
+            toolRequest.action,
+            toolRequest.targetResource,
+            toolRequest.description,
+            toolRequest.parameters
+          );
+
+          return {
+            requiresConfirmation: true,
+            request
+          };
+        }
+
+        // Execute immediately without confirmation (read operations)
+        const executionResult = await this.toolExecutor.execute(
+          toolRequest.action,
+          toolRequest.targetResource,
+          toolRequest.parameters
+        );
+
+        // Integrate result into conversation and continue with LLM
+        const toolResultMessage = executionResult.success
+          ? `[RESULTADO DE HERRAMIENTA]\nAcción: ${toolRequest.action}\nResultado:\n${executionResult.output}\n\nDuración: ${executionResult.durationMs}ms\n\nExplica brevemente qué obtuvimos y cómo responde a la solicitud del usuario.`
+          : `[ERROR DE HERRAMIENTA]\nAcción: ${toolRequest.action}\nError:\n${executionResult.output}\n\nExplica el error al usuario de forma clara.`;
+
+        // Replace user text with tool result for LLM context
+        text = toolResultMessage;
+
+        logger.info('Tool executed without confirmation', {
+          userId,
+          action: toolRequest.action,
+          success: executionResult.success,
+          duration: executionResult.durationMs
+        });
+      }
+
+      // 8. Check for prospective commands in conversation (Fase 6 enhancement)
       const prospectiveCommand = this.prospectiveCommandAnalyzer.analyzeCommand(text);
       let prospectiveCommandMessage = '';
 
@@ -132,7 +201,7 @@ export class Brain {
         partOfDay: context.temporal.partOfDay
       });
 
-      // 7. Analyze intent to decide which model to use
+      // 9. Analyze intent to decide which model to use
       const conversationContext = history
         .slice(-3)
         .map(m => `${m.role}: ${m.content}`);
@@ -146,7 +215,7 @@ export class Brain {
         confidence: intent.confidence
       });
 
-      // 8. Select provider based on intent
+      // 10. Select provider based on intent
       const provider = intent.needsReasoning
         ? this.reasoningProvider
         : this.conversationProvider;
@@ -157,10 +226,10 @@ export class Brain {
         reasoning: intent.reasoning
       });
 
-      // 9. Build system prompt with memories, context, and prospectives
+      // 11. Build system prompt with memories, context, and prospectives
       const systemPrompt = SystemPromptBuilder.build(profile, memories, context, prospectives);
 
-      // 10. Prepare messages for LLM
+      // 12. Prepare messages for LLM
       const messages: LLMMessage[] = [
         ...history.map(h => ({
           role: h.role,
@@ -169,10 +238,10 @@ export class Brain {
         { role: 'user' as const, content: text }
       ];
 
-      // 11. Generate response
+      // 13. Generate response
       const response = await provider.generateContent(messages, systemPrompt);
 
-      // 12. Save user message
+      // 14. Save user message
       this.conversationStore.saveMessage({
         userId,
         role: 'user',
@@ -180,7 +249,7 @@ export class Brain {
         timestamp
       });
 
-      // 13. Save assistant response
+      // 15. Save assistant response
       this.conversationStore.saveMessage({
         userId,
         role: 'assistant',
@@ -189,7 +258,7 @@ export class Brain {
         modelUsed: provider.getName()
       });
 
-      // 14. Extract and save new memories (retrospective)
+      // 16. Extract and save new memories (retrospective)
       const recentMessages = this.conversationStore.getHistory(userId, 6);
       const newMemories = await this.memoryExtractor.extractMemories(
         userId,
@@ -209,7 +278,7 @@ export class Brain {
         }
       }
 
-      // 15. Extract and save new prospective memories (Fase 6)
+      // 17. Extract and save new prospective memories (Fase 6)
       const newProspectives = await this.prospectiveExtractor.extractProspectives(
         userId,
         recentMessages,
@@ -233,10 +302,10 @@ export class Brain {
         }
       }
 
-      // 16. Detect prospective completions (Fase 6)
+      // 18. Detect prospective completions (Fase 6)
       await this.detectProspectiveCompletions(userId, text, response.content, prospectives);
 
-      // 17. Track token usage
+      // 19. Track token usage
       this.tokenTracker.track(userId, provider.getName(), response.usage);
 
       logger.info('Message processed', {
@@ -317,6 +386,20 @@ export class Brain {
    */
   getProspectiveCount(userId: string): number {
     return this.prospectiveStore.getPending(userId).length;
+  }
+
+  /**
+   * Get tool actions store (Fase 7)
+   */
+  getToolActionsStore(): ToolActionsStore {
+    return this.toolActionsStore;
+  }
+
+  /**
+   * Get tool executor (Fase 7)
+   */
+  getToolExecutor(): ToolExecutor {
+    return this.toolExecutor;
   }
 
   /**

@@ -49,6 +49,30 @@
 - ✅ **Indicadores visuales:** 🎙 grabando → ✏️ escribiendo
 - ✅ **Limpieza automática:** Archivos temporales eliminados después de transcripción
 
+### Fase 6 ✅ (Completada)
+
+- ✅ **Memoria Prospectiva Natural:** Intenciones futuras (tareas, eventos, recordatorios)
+- ✅ **Detección 100% Natural:** LLM extrae intenciones sin keywords
+- ✅ **Timezone Aware:** Fechas y horas en zona horaria del usuario
+- ✅ **Deduplicación Inteligente:** Evita duplicados con Levenshtein distance
+- ✅ **Comandos Conversacionales:** "marca como completada...", "elimina...", etc.
+- ✅ **Recordatorios Proactivos:** Menciona intenciones vencidas automáticamente
+- ✅ **Clasificación Temporal:** Vencidas, hoy, próximos 7 días, más adelante
+- ✅ **Recurrencia:** daily, weekly, monthly, yearly
+- ✅ **Comandos Telegram:** /tasks, /done, /delete, /cancel
+
+### Fase 7 ✅ (Completada) - **LAS MANOS DEL ASISTENTE**
+
+- ✅ **Ejecutar Comandos:** Shell commands con validación exhaustiva de seguridad
+- ✅ **Leer Archivos:** Acceso a archivos dentro del workspace
+- ✅ **Escribir Archivos:** Crear y modificar archivos (con confirmación)
+- ✅ **Listar Directorios:** Explorar estructura de carpetas
+- ✅ **Búsqueda Web:** Integración con Tavily API para información actualizada
+- ✅ **Sistema de Confirmación:** Botones inline en Telegram para acciones peligrosas
+- ✅ **Detección Natural:** LLM analiza solicitudes sin keywords
+- ✅ **Seguridad Extrema:** Lista negra, validación de paths, timeouts, sanitización
+- ✅ **Sandbox Estricto:** Solo opera dentro del workspace del proyecto
+
 ## 🏗️ Arquitectura
 
 ```
@@ -56,17 +80,26 @@ AridV2
 ├── Brain (Cerebro)       - Orquestación de conversación
 │   ├── IntentAnalyzer    - Análisis de intención con LLM
 │   ├── MemoryExtractor   - Extracción automática de memorias
+│   ├── ProspectiveMemoryExtractor - Extracción de intenciones futuras
+│   ├── ToolsAnalyzer     - Detección de solicitudes de herramientas
 │   └── SystemPromptBuilder - Construcción de prompts con contexto
 ├── Context               - Contexto temporal y espacial
 │   ├── ContextProvider   - Obtención de contexto temporal/espacial
 │   └── TimezoneUtils     - Utilidades de timezone y formateo
-├── Senses (Sentidos)     - Inputs (Telegram)
-├── Hands (Manos)         - Tools (vacío en Fase 1-3)
+├── Senses (Sentidos)     - Inputs (Telegram + Whisper)
+├── Hands (Manos)         - Tools (NUEVO en Fase 7)
+│   ├── ToolExecutor      - Orquestador de herramientas
+│   ├── CommandExecutor   - Ejecuta comandos shell seguros
+│   ├── FileManager       - Operaciones de archivos
+│   ├── WebSearcher       - Búsqueda web (Tavily API)
+│   ├── ToolActionsStore  - Solicitudes pendientes
+│   └── SecurityValidator - Validaciones centralizadas
 ├── LLM Layer            - Multi-provider abstraction
-├── Storage              - JSON-based (historial, perfiles, tokens, memorias)
+├── Storage              - JSON-based (historial, perfiles, tokens, memorias, prospectives, toolActions)
 │   ├── ConversationStore - Últimos 40 mensajes
 │   ├── ProfileStore      - Perfil del usuario (+ ubicación)
-│   └── MemoryStore       - Memorias de largo plazo
+│   ├── MemoryStore       - Memorias de largo plazo
+│   └── ProspectiveMemoryStore - Intenciones futuras
 └── Onboarding           - Setup inicial (5 preguntas)
 ```
 
@@ -122,6 +155,8 @@ pnpm test:coverage
 - `WHISPER_URL`: URL del servicio Whisper (default: http://localhost:9000)
 - `WHISPER_MODEL`: Modelo Whisper (default: base)
 - `WHISPER_LANGUAGE`: Idioma de transcripción (default: es)
+- `TOOLS_WORKSPACE_PATH`: Path del workspace para tools (default: directorio actual)
+- `TAVILY_API_KEY`: API key de Tavily para búsquedas web (opcional)
 
 ### Modos de Operación
 
@@ -140,6 +175,10 @@ pnpm test:coverage
 - `/reset` - Limpiar historial de conversación
 - `/profile` - Ver perfil del usuario
 - `/memories` - Ver memorias guardadas sobre ti
+- `/tasks` - Ver intenciones futuras (tareas, eventos, recordatorios)
+- `/done` - Marcar intención como completada
+- `/delete` - Eliminar intención
+- `/cancel` - Cancelar intención
 - `/stats` - Ver estadísticas de uso de tokens
 
 ## 🧠 Sistema de Memoria Dinámica (Fase 2)
