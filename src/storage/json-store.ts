@@ -26,6 +26,9 @@ interface StoreData {
   daily_routines?: Record<string, any[]>; // Fase 10 PASO 7: Daily routine executions
   routine_configs?: Record<string, any>; // Fase 10 PASO 7: Routine user configurations
   user_feedback?: any[]; // Fase 10 PASO 9: User feedback for learning
+  tasks?: Record<string, any[]>; // PASO 11: Task queue by user
+  projects?: Record<string, any[]>; // PASO 11: Project state by user
+  task_execution_log?: any[]; // PASO 11: Audit trail
 }
 
 export class JSONStore {
@@ -38,7 +41,10 @@ export class JSONStore {
     prospective: {},
     toolActions: [],
     patterns: {},
-    action_executions: {}
+    action_executions: {},
+    tasks: {},
+    projects: {},
+    task_execution_log: []
   };
   private filePath: string;
   private initialized = false;
@@ -73,6 +79,9 @@ export class JSONStore {
       this.data.credentials = this.data.credentials || {}; // Fase 9
       this.data.skills = this.data.skills || {}; // Fase 9
       this.data.backgroundProcesses = this.data.backgroundProcesses || {}; // Fase 9
+      this.data.tasks = this.data.tasks || {}; // PASO 11
+      this.data.projects = this.data.projects || {}; // PASO 11
+      this.data.task_execution_log = this.data.task_execution_log || []; // PASO 11
 
       this.initialized = true;
     } catch (error) {

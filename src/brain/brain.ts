@@ -47,6 +47,11 @@ import { RoutineStore } from '../storage/routine.store.js';
 import { EmergencyInterruptHandler } from '../autonomous/emergency-interrupt.js';
 import { FeedbackProcessor } from '../autonomous/feedback-processor.js';
 import { OpportunityDetector } from '../autonomous/opportunity-detector.js';
+import { TaskQueueStore } from '../storage/task-queue.store.js';
+import { AutonomousDaemon } from '../autonomous/autonomous-daemon.js';
+import { ProjectStateTracker } from '../autonomous/project-state.js';
+import { TaskReporter } from '../autonomous/task-reporter.js';
+import { TaskEnqueuer } from '../autonomous/task-enqueuer.js';
 
 export interface BrainConfig {
   conversationProvider: LLMProvider;
@@ -100,6 +105,13 @@ export class Brain {
   private emergencyHandler: EmergencyInterruptHandler; // PASO 8: Emergency interrupts
   private feedbackProcessor: FeedbackProcessor; // PASO 9: Learning from feedback
   private opportunityDetector: OpportunityDetector; // PASO 10: Proactive opportunities
+  
+  // PASO 11: Task Daemon with Queue System
+  private taskQueueStore: TaskQueueStore;
+  private autonomousDaemon: AutonomousDaemon;
+  private projectStateTracker: ProjectStateTracker;
+  private taskReporter: TaskReporter;
+  private taskEnqueuer: TaskEnqueuer;
   
   // Estado de flujo de credenciales en progreso
   // Mantiene contexto: "estoy esperando credencial X para skill Y"
@@ -195,6 +207,12 @@ export class Brain {
       this.prospectiveStore,
       skillStore
     );
+
+    // PASO 11: Initialize Task Queue and Enqueuer BEFORE AutonomousEngine
+    const jsonStore = this.conversationStore.getStore();
+    this.taskQueueStore = new TaskQueueStore(jsonStore);
+    this.projectStateTracker = new ProjectStateTracker(jsonStore);
+    this.taskEnqueuer = new TaskEnqueuer(this.taskQueueStore);
     
     this.autonomousEngine = new AutonomousEngine(
       skillStore,
@@ -212,7 +230,23 @@ export class Brain {
       this.routineStore,
       this.emergencyHandler,
       this.feedbackProcessor,
-      this.opportunityDetector
+      this.opportunityDetector,
+      this.taskEnqueuer
+    );
+
+    // PASO 11: Initialize Task Daemon and Reporter
+    const telegramSender = this.sendAutonomousNotification.bind(this);
+    this.taskReporter = new TaskReporter({
+      policy: 'smart',
+      telegramSender,
+    });
+    
+    const backgroundExecutor = new BackgroundExecutor(config.workspacePath);
+    
+    this.autonomousDaemon = new AutonomousDaemon(
+      this.taskQueueStore,
+      backgroundExecutor,
+      this.skillThreadExecutor
     );
 
     logger.info('Brain initialized', {
@@ -1642,6 +1676,51 @@ export class Brain {
     } catch (error) {
       logger.error('Failed to initialize autonomous mode', { userId, error });
     }
+  }
+
+  /**
+   * Start the autonomous task daemon (PASO 11)
+   */
+  async startTaskDaemon(): Promise<void> {
+    try {
+      await this.autonomousDaemon.start();
+      logger.info('Task daemon started');
+    } catch (error) {
+      logger.error('Failed to start task daemon', { error });
+    }
+  }
+
+  /**
+   * Stop the autonomous task daemon (PASO 11)
+   */
+  async stopTaskDaemon(): Promise<void> {
+    try {
+      await this.autonomousDaemon.stop();
+      logger.info('Task daemon stopped');
+    } catch (error) {
+      logger.error('Failed to stop task daemon', { error });
+    }
+  }
+
+  /**
+   * Get current task daemon status (PASO 11)
+   */
+  getTaskDaemonStatus() {
+    return this.autonomousDaemon.getStatus();
+  }
+
+  /**
+   * Get access to task queue store for enqueueing/managing tasks (PASO 11)
+   */
+  getTaskQueue() {
+    return this.taskQueueStore;
+  }
+
+  /**
+   * Get access to project state tracker (PASO 11)
+   */
+  getProjectTracker() {
+    return this.projectStateTracker;
   }
 
   /**

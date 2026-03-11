@@ -30,6 +30,7 @@ import { RoutineStore } from '../storage/routine.store.js';
 import { EmergencyInterruptHandler } from './emergency-interrupt.js';
 import { FeedbackProcessor } from './feedback-processor.js';
 import { OpportunityDetector } from './opportunity-detector.js';
+import { TaskEnqueuer } from './task-enqueuer.js';
 
 export interface AutonomousAction {
   id: string;
@@ -73,7 +74,8 @@ export class AutonomousEngine {
     private routineStore: RoutineStore,
     private emergencyHandler: EmergencyInterruptHandler,
     private feedbackProcessor: FeedbackProcessor,
-    private opportunityDetector: OpportunityDetector
+    private opportunityDetector: OpportunityDetector,
+    private taskEnqueuer?: TaskEnqueuer
   ) {}
 
   /**
@@ -753,19 +755,34 @@ export class AutonomousEngine {
         return;
       }
 
+      // PASO 11: Encolar tarea en daemon si TaskEnqueuer está disponible
+      let enqueuedTaskId: string | null = null;
+      if (this.taskEnqueuer) {
+        enqueuedTaskId = await this.taskEnqueuer.enqueueOpportunity(userId, topOpportunity);
+        logger.info('Opportunity enqueued in daemon', {
+          userId,
+          taskId: enqueuedTaskId,
+          skillName: topOpportunity.skillName,
+        });
+      }
+
       // Generar y enviar sugerencia de oportunidad
       const message =
         `💡 **${topOpportunity.title}**\n\n` +
         `${topOpportunity.description}\n\n` +
-        `_Confianza: ${(topOpportunity.confidence * 100).toFixed(0)}%_`;
+        `_Confianza: ${(topOpportunity.confidence * 100).toFixed(0)}%_` +
+        (enqueuedTaskId
+          ? `\n\n✅ Tarea encolada automáticamente (ID: ${enqueuedTaskId})`
+          : '');
 
       await this.telegramSender(userId, message);
 
-      logger.info('Opportunity suggested', {
+      logger.info('Opportunity suggested and enqueued', {
         userId,
         skillName: topOpportunity.skillName,
         confidence: topOpportunity.confidence,
         factors: topOpportunity.factors,
+        taskId: enqueuedTaskId,
       });
     } catch (error) {
       logger.error('Error detecting opportunities', { userId, error });
