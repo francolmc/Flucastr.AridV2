@@ -38,7 +38,8 @@ async function main() {
       reasoningProvider: providers.reasoning,
       analyzerProvider: providers.analyzer,
       workspacePath: config.tools.workspacePath,
-      tavilyApiKey: config.tools.tavilyApiKey
+      tavilyApiKey: config.tools.tavilyApiKey,
+      storageEncryptionKey: config.skills.encryptionKey
     });
     logger.info('Brain initialized');
 

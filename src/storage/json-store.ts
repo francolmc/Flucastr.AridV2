@@ -18,6 +18,9 @@ interface StoreData {
   prospective: Record<string, any[]>; // Fase 6: Memoria prospectiva
   toolActions?: any[]; // Fase 7: Tool action requests
   uploadedFiles?: any[]; // Fase 8: Uploaded file metadata
+  credentials?: Record<string, any[]>; // Fase 9: Skill credentials (encrypted)
+  skills?: Record<string, any[]>; // Fase 9: Skill metadata
+  backgroundProcesses?: Record<string, any[]>; // Fase 9: Background process state
 }
 
 export class JSONStore {
@@ -60,6 +63,9 @@ export class JSONStore {
       this.data.prospective = this.data.prospective || {};
       this.data.toolActions = this.data.toolActions || [];
       this.data.uploadedFiles = this.data.uploadedFiles || []; // Fase 8
+      this.data.credentials = this.data.credentials || {}; // Fase 9
+      this.data.skills = this.data.skills || {}; // Fase 9
+      this.data.backgroundProcesses = this.data.backgroundProcesses || {}; // Fase 9
 
       this.initialized = true;
     } catch (error) {
@@ -331,6 +337,172 @@ export class JSONStore {
       );
       this.saveSync();
     }
+  }
+
+  // Credentials methods (Fase 9: Skills System)
+  addCredential(userId: string, credential: any): void {
+    if (!this.data.credentials) {
+      this.data.credentials = {};
+    }
+    if (!this.data.credentials[userId]) {
+      this.data.credentials[userId] = [];
+    }
+
+    // Evitar duplicados: si existe con mismo userId:skillName:key, reemplazar
+    const index = this.data.credentials[userId].findIndex(
+      c => c.skillName === credential.skillName && c.key === credential.key
+    );
+
+    if (index !== -1) {
+      this.data.credentials[userId][index] = credential;
+    } else {
+      this.data.credentials[userId].push(credential);
+    }
+
+    this.saveSync();
+  }
+
+  getCredentials(userId: string, skillName: string): any[] {
+    if (!this.data.credentials || !this.data.credentials[userId]) {
+      return [];
+    }
+
+    return this.data.credentials[userId].filter(c => c.skillName === skillName);
+  }
+
+  getAllCredentials(userId: string): any[] {
+    if (!this.data.credentials || !this.data.credentials[userId]) {
+      return [];
+    }
+
+    return this.data.credentials[userId];
+  }
+
+  deleteCredential(userId: string, skillName: string, key: string): void {
+    if (!this.data.credentials || !this.data.credentials[userId]) {
+      return;
+    }
+
+    this.data.credentials[userId] = this.data.credentials[userId].filter(
+      c => !(c.skillName === skillName && c.key === key)
+    );
+
+    this.saveSync();
+  }
+
+  // Skills methods (Fase 9: Skills System)
+  addSkill(userId: string, metadata: any): void {
+    if (!this.data.skills) {
+      this.data.skills = {};
+    }
+    if (!this.data.skills[userId]) {
+      this.data.skills[userId] = [];
+    }
+
+    // Evitar duplicados por name
+    const index = this.data.skills[userId].findIndex(s => s.name === metadata.name);
+    if (index !== -1) {
+      this.data.skills[userId][index] = metadata;
+    } else {
+      this.data.skills[userId].push(metadata);
+    }
+
+    this.saveSync();
+  }
+
+  getSkill(userId: string, skillName: string): any {
+    if (!this.data.skills || !this.data.skills[userId]) {
+      return null;
+    }
+
+    return this.data.skills[userId].find(s => s.name === skillName) || null;
+  }
+
+  getSkills(userId: string): any[] {
+    if (!this.data.skills || !this.data.skills[userId]) {
+      return [];
+    }
+
+    return this.data.skills[userId];
+  }
+
+  updateSkill(userId: string, skillName: string, updates: any): void {
+    if (!this.data.skills || !this.data.skills[userId]) {
+      return;
+    }
+
+    const index = this.data.skills[userId].findIndex(s => s.name === skillName);
+    if (index !== -1) {
+      this.data.skills[userId][index] = {
+        ...this.data.skills[userId][index],
+        ...updates,
+      };
+      this.saveSync();
+    }
+  }
+
+  deleteSkill(userId: string, skillName: string): void {
+    if (!this.data.skills || !this.data.skills[userId]) {
+      return;
+    }
+
+    this.data.skills[userId] = this.data.skills[userId].filter(s => s.name !== skillName);
+    this.saveSync();
+  }
+
+  // Background Processes methods (Fase 9: Skills System)
+  addBackgroundProcess(userId: string, process: any): void {
+    if (!this.data.backgroundProcesses) {
+      this.data.backgroundProcesses = {};
+    }
+    if (!this.data.backgroundProcesses[userId]) {
+      this.data.backgroundProcesses[userId] = [];
+    }
+
+    this.data.backgroundProcesses[userId].push(process);
+    this.saveSync();
+  }
+
+  getBackgroundProcess(userId: string, processId: string): any {
+    if (!this.data.backgroundProcesses || !this.data.backgroundProcesses[userId]) {
+      return null;
+    }
+
+    return this.data.backgroundProcesses[userId].find(p => p.id === processId) || null;
+  }
+
+  getBackgroundProcesses(userId: string): any[] {
+    if (!this.data.backgroundProcesses || !this.data.backgroundProcesses[userId]) {
+      return [];
+    }
+
+    return this.data.backgroundProcesses[userId];
+  }
+
+  updateBackgroundProcess(userId: string, processId: string, updates: any): void {
+    if (!this.data.backgroundProcesses || !this.data.backgroundProcesses[userId]) {
+      return;
+    }
+
+    const index = this.data.backgroundProcesses[userId].findIndex(p => p.id === processId);
+    if (index !== -1) {
+      this.data.backgroundProcesses[userId][index] = {
+        ...this.data.backgroundProcesses[userId][index],
+        ...updates,
+      };
+      this.saveSync();
+    }
+  }
+
+  deleteBackgroundProcess(userId: string, processId: string): void {
+    if (!this.data.backgroundProcesses || !this.data.backgroundProcesses[userId]) {
+      return;
+    }
+
+    this.data.backgroundProcesses[userId] = this.data.backgroundProcesses[userId].filter(
+      p => p.id !== processId
+    );
+    this.saveSync();
   }
 
   // Generic read/write methods (for ToolActionsStore)

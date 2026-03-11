@@ -8,6 +8,11 @@ export interface Config {
   storage: StorageConfig;
   whisper: WhisperConfig;
   tools: ToolsConfig;
+  skills: SkillsConfig;  // Fase 9
+}
+
+export interface SkillsConfig {
+  encryptionKey: string;  // Master key para encriptación de credentials
 }
 
 export interface TelegramConfig {
@@ -75,11 +80,16 @@ export interface LLMMessage {
 
 export interface LLMResponse {
   content: string;
-  stopReason: 'end_turn' | 'max_tokens' | 'stop_sequence';
+  stopReason: 'end_turn' | 'max_tokens' | 'stop_sequence' | 'tool_use';
   usage: {
     inputTokens: number;
     outputTokens: number;
   };
+  toolCalls?: Array<{
+    id: string;
+    name: string;
+    input: any;
+  }>;
 }
 
 export interface IntentAnalysis {
@@ -238,4 +248,63 @@ export interface UploadedFile {
     duration?: number;           // Para videos/audio (en segundos)
     thumbnailPath?: string;      // Para videos
   };
+}
+
+/**
+ * Skill Metadata - YAML frontmatter de SKILL.md (Fase 9)
+ */
+export interface SkillMetadata {
+  id: string;                    // UUID interno
+  userId: string;                // Usuario owner
+  name: string;                  // skill-name (lowercase, hyphens)
+  description: string;           // Breve descripción (cuándo usar)
+  requiredEnv?: string[];        // Env vars requeridas ["GITHUB_TOKEN"]
+  createdAt: Date;
+  updatedAt: Date;
+  lastUsed?: Date;
+  usageCount: number;            // Cuántas veces se ha usado
+}
+
+/**
+ * Skill - Recurso completo con instrucciones (Fase 9)
+ */
+export interface Skill {
+  metadata: SkillMetadata;
+  content: string;               // Body de SKILL.md (markdown)
+  filePath: string;              // workspace/skills/{userId}/{name}/SKILL.md
+}
+
+/**
+ * Skill Credential - Token/API key asociado a un skill (Fase 9)
+ */
+export interface SkillCredential {
+  id: string;                    // UUID
+  userId: string;
+  skillName: string;             // Nombre del skill que lo requiere
+  key: string;                   // Nombre de la variable (ej: "GITHUB_TOKEN")
+  encryptedValue: string;        // Valor encriptado
+  encryptionIv: string;          // IV usado en la encriptación
+  encryptionTag: string;         // GCM auth tag
+  createdAt: Date;
+  updatedAt: Date;
+  lastUsed?: Date;               // Cuándo se usó por última vez
+}
+
+/**
+ * Background Process - Proceso ejecutándose en background (Fase 9)
+ */
+export type ProcessStatus = 'running' | 'completed' | 'failed' | 'cancelled';
+
+export interface BackgroundProcess {
+  id: string;                    // UUID = processId
+  userId: string;
+  skillName: string;             // Skill que generó el proceso
+  command: string;               // Comando ejecutado
+  status: ProcessStatus;
+  startedAt: Date;
+  completedAt?: Date;
+  durationsMs?: number;          // Duración en millisegundos
+  output?: string;               // stdout + stderr
+  error?: string;                // Mensaje de error si falló
+  exitCode?: number;             // Código de salida del proceso
 }

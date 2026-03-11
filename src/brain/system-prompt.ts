@@ -1,11 +1,13 @@
 /**
  * System Prompt Builder
  * Generates system prompts in Spanish (<500 tokens)
+ * Fase 9: Integración de Skills
  */
 
 import { Profile, Memory, ProspectiveMemory } from '../config/types.js';
 import { UserContext } from '../context/types.js';
 import { logger } from '../utils/logger.js';
+import type { ParsedSkill } from './skill-loader.js';
 
 export class SystemPromptBuilder {
   /**
@@ -15,12 +17,14 @@ export class SystemPromptBuilder {
    * @param memories - Optional memories to include (top 10 by importance)
    * @param context - Optional temporal/spatial context
    * @param prospectives - Optional prospective memories (Fase 6)
+   * @param skills - Optional skills to include (Fase 9)
    */
   static build(
     profile: Profile,
     memories?: Memory[],
     context?: UserContext,
-    prospectives?: ProspectiveMemory[]
+    prospectives?: ProspectiveMemory[],
+    skills?: ParsedSkill[]
   ): string {
     const userName = profile.userName || 'el usuario';
     const personality = profile.personality || 'amigable y útil';
@@ -191,6 +195,23 @@ export class SystemPromptBuilder {
       prospectiveSection += '\n';
     }
 
+    // Build skills section (Fase 9)
+    let skillsSection = '';
+    if (skills && skills.length > 0) {
+      skillsSection = `\n# SKILLS DISPONIBLES\n\nTienes acceso a los siguientes skills especializados que puedes usar cuando sea relevante:\n`;
+
+      for (const skill of skills) {
+        skillsSection += `\n## ${skill.metadata.name}\n`;
+        skillsSection += `${skill.metadata.description}\n`;
+
+        // Mostrar primeras líneas de instrucciones
+        const instructionPreview = skill.instructions.split('\n').slice(0, 3).join('\n');
+        skillsSection += `**Instrucciones:** ${instructionPreview.substring(0, 150)}...\n`;
+      }
+
+      skillsSection += `\n**Cómo usar skills:** Cuando el usuario pide algo relacionado con un skill, úsalo para ayudarle. Explica que estás usando el skill.\n`;
+    }
+
     const systemPrompt = `# IDENTIDAD
 Eres ${profile.agentName}, un asistente conversacional inteligente.
 
@@ -348,16 +369,20 @@ Cuando el usuario mencione algo personal, importante o emotionalmente significat
 - Usuario: "Terminé mi curso"
   → Patrón: Detecta logro, celebra y pregunta cómo se siente o qué aprendió`;
 
+    // Combine all sections into final prompt
+    const fullPrompt = systemPrompt + skillsSection;
+
     logger.debug('System prompt built', {
       agentName: profile.agentName,
       personality: personality.substring(0, 50),
       memoriesIncluded: memories?.length || 0,
       prospectivesIncluded: prospectives?.length || 0,
-      length: systemPrompt.length,
-      estimatedTokens: Math.ceil(systemPrompt.length / 4)
+      skillsIncluded: skills?.length || 0,
+      length: fullPrompt.length,
+      estimatedTokens: Math.ceil(fullPrompt.length / 4)
     });
 
-    return systemPrompt;
+    return fullPrompt;
   }
 
   /**

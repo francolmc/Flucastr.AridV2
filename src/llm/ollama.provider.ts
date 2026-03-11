@@ -6,6 +6,7 @@ import { LLMProvider } from './provider.interface.js';
 import { LLMMessage, LLMResponse } from '../config/types.js';
 import { logger } from '../utils/logger.js';
 import { LLMError } from '../utils/errors.js';
+import { ToolDefinition } from '../hands/tool-definitions.js';
 
 interface OllamaMessage {
   role: string;
@@ -38,7 +39,8 @@ export class OllamaProvider implements LLMProvider {
 
   async generateContent(
     messages: LLMMessage[],
-    systemPrompt?: string
+    systemPrompt?: string,
+    tools?: ToolDefinition[]  // Not implemented for Ollama yet
   ): Promise<LLMResponse> {
     try {
       // Build messages array

@@ -7,7 +7,11 @@ export type ToolAction =
   | 'write_file'
   | 'list_directory'
   | 'execute_command'
-  | 'web_search';
+  | 'web_search'
+  | 'create_skill'
+  | 'edit_skill'
+  | 'delete_skill'
+  | 'save_credentials';
 
 export type ToolActionStatus = 'pending' | 'approved' | 'rejected' | 'executed';
 

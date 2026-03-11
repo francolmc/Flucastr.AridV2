@@ -4,14 +4,16 @@
  */
 
 import { LLMMessage, LLMResponse } from '../config/types.js';
+import { ToolDefinition } from '../hands/tool-definitions.js';
 
 export interface LLMProvider {
   /**
-   * Generate content from messages with optional system prompt
+   * Generate content from messages with optional system prompt and tools
    */
   generateContent(
     messages: LLMMessage[],
-    systemPrompt?: string
+    systemPrompt?: string,
+    tools?: ToolDefinition[]
   ): Promise<LLMResponse>;
 
   /**

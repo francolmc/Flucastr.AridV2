@@ -60,6 +60,15 @@ export function loadConfig(): Config {
   const toolsWorkspacePath = process.env.TOOLS_WORKSPACE_PATH || process.cwd();
   const tavilyApiKey = process.env.TAVILY_API_KEY;
 
+  // Skills Encryption (Fase 9)
+  const storageEncryptionKey = process.env.STORAGE_ENCRYPTION_KEY;
+  if (!storageEncryptionKey) {
+    throw new AppError(
+      'STORAGE_ENCRYPTION_KEY is required for skill credentials encryption. Generate with: ' +
+      'node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"'
+    );
+  }
+
   return {
     telegram: {
       botToken: telegramBotToken,
@@ -95,6 +104,9 @@ export function loadConfig(): Config {
     tools: {
       workspacePath: toolsWorkspacePath,
       tavilyApiKey,
+    },
+    skills: {
+      encryptionKey: storageEncryptionKey,
     },
   };
 }

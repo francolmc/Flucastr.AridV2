@@ -7,6 +7,7 @@ import { LLMProvider } from './provider.interface.js';
 import { LLMMessage, LLMResponse } from '../config/types.js';
 import { logger } from '../utils/logger.js';
 import { LLMError } from '../utils/errors.js';
+import { ToolDefinition } from '../hands/tool-definitions.js';
 
 export class AnthropicProvider implements LLMProvider {
   private client: Anthropic;
@@ -23,7 +24,8 @@ export class AnthropicProvider implements LLMProvider {
 
   async generateContent(
     messages: LLMMessage[],
-    systemPrompt?: string
+    systemPrompt?: string,
+    tools?: ToolDefinition[]
   ): Promise<LLMResponse> {
     try {
       // Format messages for Anthropic API (with multimodal support)
@@ -68,26 +70,56 @@ export class AnthropicProvider implements LLMProvider {
           }]
         : undefined;
 
-      const response = await this.client.messages.create({
+      // Prepare request params
+      const requestParams: Anthropic.Messages.MessageCreateParams = {
         model: this.model,
         max_tokens: 8192,
         system: systemConfig,
         messages: anthropicMessages
-      });
+      };
+
+      // Add tools if provided
+      if (tools && tools.length > 0) {
+        requestParams.tools = tools as any;
+      }
+
+      const response = await this.client.messages.create(requestParams);
 
       // Extract text content
-      const content = response.content
+      const textContent = response.content
         .filter(block => block.type === 'text')
         .map(block => (block as any).text)
         .join('\n');
 
+      // Extract tool use blocks
+      const toolUseBlocks = response.content.filter(block => block.type === 'tool_use');
+      
+      const toolCalls = toolUseBlocks.length > 0 
+        ? toolUseBlocks.map((block: any) => ({
+            id: block.id,
+            name: block.name,
+            input: block.input
+          }))
+        : undefined;
+
+      // Determine stop reason
+      let stopReason: 'end_turn' | 'max_tokens' | 'stop_sequence' | 'tool_use' = 'end_turn';
+      if (response.stop_reason === 'tool_use') {
+        stopReason = 'tool_use';
+      } else if (response.stop_reason === 'max_tokens') {
+        stopReason = 'max_tokens';
+      } else if (response.stop_reason === 'stop_sequence') {
+        stopReason = 'stop_sequence';
+      }
+
       return {
-        content,
-        stopReason: this.mapStopReason(response.stop_reason),
+        content: textContent,
+        stopReason,
         usage: {
           inputTokens: response.usage.input_tokens,
           outputTokens: response.usage.output_tokens
-        }
+        },
+        toolCalls
       };
     } catch (error) {
       logger.error('Anthropic API error', error);
