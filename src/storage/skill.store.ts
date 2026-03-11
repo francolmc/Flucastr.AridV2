@@ -26,7 +26,8 @@ export class SkillStore {
     name: string,
     description: string,
     content: string,
-    requiredEnv?: string[]
+    requiredEnv?: string[],
+    autonomousTriggers?: string[]
   ): Promise<Skill> {
     try {
       const skillDir = join(this.workspacePath, 'skills', name);
@@ -40,6 +41,7 @@ export class SkillStore {
         name,
         description,
         requiredEnv,
+        autonomousTriggers,
       });
 
       const fullContent = `${yamlFrontmatter}\n\n${content}`;
@@ -52,6 +54,7 @@ export class SkillStore {
         name,
         description,
         requiredEnv: requiredEnv || [],
+        autonomousTriggers: autonomousTriggers || [],
         createdAt: new Date(),
         updatedAt: new Date(),
         usageCount: 0,
@@ -118,6 +121,7 @@ export class SkillStore {
   async updateSkill(userId: string, skillName: string, updates: {
     description?: string;
     requiredEnv?: string[];
+    autonomousTriggers?: string[];
     content?: string;
   }): Promise<Skill> {
     try {
@@ -141,6 +145,7 @@ export class SkillStore {
         ...metadata,
         description: updates.description || metadata.description,
         requiredEnv: updates.requiredEnv || metadata.requiredEnv,
+        autonomousTriggers: updates.autonomousTriggers !== undefined ? updates.autonomousTriggers : metadata.autonomousTriggers,
         updatedAt: new Date(),
       };
 
@@ -152,6 +157,7 @@ export class SkillStore {
         name: skillName,
         description: updatedMetadata.description,
         requiredEnv: updatedMetadata.requiredEnv,
+        autonomousTriggers: updatedMetadata.autonomousTriggers,
       });
 
       // Extraer el body (todo después del frontmatter)
@@ -355,8 +361,9 @@ export class SkillStore {
     name: string;
     description: string;
     requiredEnv?: string[];
+    autonomousTriggers?: string[];
   }): string {
-    const { name, description, requiredEnv } = options;
+    const { name, description, requiredEnv, autonomousTriggers } = options;
 
     let yaml = '---\n';
     yaml += `name: ${name}\n`;
@@ -366,6 +373,13 @@ export class SkillStore {
       yaml += `required-env:\n`;
       for (const env of requiredEnv) {
         yaml += `  - ${env}\n`;
+      }
+    }
+
+    if (autonomousTriggers && autonomousTriggers.length > 0) {
+      yaml += `autonomous-triggers:\n`;
+      for (const trigger of autonomousTriggers) {
+        yaml += `  - ${trigger}\n`;
       }
     }
 

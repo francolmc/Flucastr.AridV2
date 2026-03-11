@@ -21,6 +21,11 @@ interface StoreData {
   credentials?: Record<string, any[]>; // Fase 9: Skill credentials (encrypted)
   skills?: Record<string, any[]>; // Fase 9: Skill metadata
   backgroundProcesses?: Record<string, any[]>; // Fase 9: Background process state
+  patterns?: Record<string, any[]>; // Fase 10: User behavior patterns
+  action_executions?: Record<string, any[]>; // Fase 10: Action execution logs
+  daily_routines?: Record<string, any[]>; // Fase 10 PASO 7: Daily routine executions
+  routine_configs?: Record<string, any>; // Fase 10 PASO 7: Routine user configurations
+  user_feedback?: any[]; // Fase 10 PASO 9: User feedback for learning
 }
 
 export class JSONStore {
@@ -31,7 +36,9 @@ export class JSONStore {
     tokens: {},
     memories: {},
     prospective: {},
-    toolActions: []
+    toolActions: [],
+    patterns: {},
+    action_executions: {}
   };
   private filePath: string;
   private initialized = false;

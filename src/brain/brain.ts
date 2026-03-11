@@ -31,6 +31,22 @@ import { SkillCredentialsFlow } from './skill-credentials-flow.js';
 import { CredentialsStore } from '../storage/credentials.store.js';
 import { SkillStore } from '../storage/skill.store.js';
 import { AVAILABLE_TOOLS } from '../hands/tool-definitions.js';
+import { AutonomousEngine } from '../autonomous/autonomous-engine.js';
+import { ContextAnalyzer } from '../autonomous/context-analyzer.js';
+import { AutonomousEventStore } from '../autonomous/event.store.js';
+import { InterruptionPolicyStore } from '../autonomous/interruption-policy.store.js';
+import { PatternDetector } from '../autonomous/pattern-detector.js';
+import { PatternStore } from '../autonomous/pattern.store.js';
+import { SkillEventMonitor } from '../autonomous/skill-event-monitor.js';
+import { UserContextStore } from '../autonomous/user-context.store.js';
+import { ActionCoordinator } from '../autonomous/action-coordinator.js';
+import { RoutineScheduler } from '../autonomous/routine-scheduler.js';
+import { RoutineGenerator } from '../autonomous/routine-generator.js';
+import { ActionStore } from '../storage/action.store.js';
+import { RoutineStore } from '../storage/routine.store.js';
+import { EmergencyInterruptHandler } from '../autonomous/emergency-interrupt.js';
+import { FeedbackProcessor } from '../autonomous/feedback-processor.js';
+import { OpportunityDetector } from '../autonomous/opportunity-detector.js';
 
 export interface BrainConfig {
   conversationProvider: LLMProvider;
@@ -66,6 +82,24 @@ export class Brain {
   private credentialsFlow: SkillCredentialsFlow;
   private credentialsStore: CredentialsStore;
   private storageEncryptionKey: string;
+  
+  // Fase 10: Autonomous Engine
+  private autonomousEngine: AutonomousEngine;
+  private autonomousEventStore: AutonomousEventStore;
+  private userContextStore: UserContextStore;
+  private interruptionPolicyStore: InterruptionPolicyStore;
+  private patternStore: PatternStore;
+  private patternDetector: PatternDetector;
+  private skillEventMonitor: SkillEventMonitor;
+  private contextAnalyzer: ContextAnalyzer;  // PASO 5: Context-aware interruption
+  private actionStore: ActionStore;          // PASO 6: Autonomous Actions
+  private actionCoordinator: ActionCoordinator; // PASO 6: Safe action execution
+  private routineScheduler: RoutineScheduler; // PASO 7: Routine scheduling
+  private routineGenerator: RoutineGenerator; // PASO 7: Routine content generation
+  private routineStore: RoutineStore;        // PASO 7: Routine persistence
+  private emergencyHandler: EmergencyInterruptHandler; // PASO 8: Emergency interrupts
+  private feedbackProcessor: FeedbackProcessor; // PASO 9: Learning from feedback
+  private opportunityDetector: OpportunityDetector; // PASO 10: Proactive opportunities
   
   // Estado de flujo de credenciales en progreso
   // Mantiene contexto: "estoy esperando credencial X para skill Y"
@@ -111,6 +145,76 @@ export class Brain {
     this.storageEncryptionKey = config.storageEncryptionKey;
     this.credentialsFlow = new SkillCredentialsFlow(credentialsStore, this.toolActionsStore);
 
+    // Fase 10: Initialize autonomous engine
+    const storePath = this.conversationStore.getStore();
+    this.autonomousEventStore = new AutonomousEventStore(storePath);
+    this.userContextStore = new UserContextStore();
+    this.interruptionPolicyStore = new InterruptionPolicyStore(storePath, this.userContextStore);
+    this.patternStore = new PatternStore(storePath);
+    this.skillEventMonitor = new SkillEventMonitor();
+    
+    // Crear PatternDetector para análisis de patrones de comportamiento
+    this.patternDetector = new PatternDetector(this.conversationStore, this.patternStore);
+    
+    // PASO 5: Crear ContextAnalyzer para tomar decisiones inteligentes de interruption
+    this.contextAnalyzer = new ContextAnalyzer(
+      this.conversationStore,
+      this.patternDetector,
+      this.interruptionPolicyStore,
+      this.userContextStore
+    );
+    
+    // PASO 6: Crear ActionStore y ActionCoordinator para ejecución de acciones autónomas
+    this.actionStore = new ActionStore(this.conversationStore.getStore());
+    this.actionCoordinator = new ActionCoordinator(
+      skillStore,
+      this.actionStore,
+      this.contextAnalyzer,
+      this.interruptionPolicyStore,
+      this.sendAutonomousNotification.bind(this)
+    );
+
+    // PASO 7: Crear componentes de rutinas (morning/evening, daily summaries, weekly planning)
+    this.routineScheduler = new RoutineScheduler(this.patternDetector, this.userContextStore);
+    this.routineGenerator = new RoutineGenerator(
+      this.prospectiveStore,
+      this.patternDetector,
+      skillStore  // Para ContextProvider
+    );
+    this.routineStore = new RoutineStore(this.conversationStore.getStore());
+
+    // PASO 8: Crear EmergencyInterruptHandler para alertas críticas
+    this.emergencyHandler = new EmergencyInterruptHandler(this.interruptionPolicyStore);
+    
+    // PASO 9: Crear FeedbackProcessor para aprender del feedback del usuario
+    this.feedbackProcessor = new FeedbackProcessor(this.conversationStore.getStore());
+    
+    // PASO 10: Crear OpportunityDetector para sugerencias proactivas
+    this.opportunityDetector = new OpportunityDetector(
+      this.patternDetector,
+      this.prospectiveStore,
+      skillStore
+    );
+    
+    this.autonomousEngine = new AutonomousEngine(
+      skillStore,
+      this.prospectiveStore,
+      this.interruptionPolicyStore,
+      this.autonomousEventStore,
+      this.patternDetector,
+      this.skillEventMonitor,
+      this.contextAnalyzer,
+      this.userContextStore,
+      this.actionCoordinator,
+      this.sendAutonomousNotification.bind(this),
+      this.routineScheduler,
+      this.routineGenerator,
+      this.routineStore,
+      this.emergencyHandler,
+      this.feedbackProcessor,
+      this.opportunityDetector
+    );
+
     logger.info('Brain initialized', {
       conversation: this.conversationProvider.getName(),
       reasoning: this.reasoningProvider.getName(),
@@ -150,6 +254,9 @@ export class Brain {
         
         return await this.processPendingCredential(userId, text, timestamp, pendingFlow);
       }
+
+      // 0.1 Record interaction for autonomous engine's interruption intelligence
+      this.autonomousEngine.recordInteraction(userId);
       
       // 1. Get conversation history
       const history = this.conversationStore.getHistory(userId, 40);
@@ -1504,5 +1611,59 @@ export class Brain {
    */
   private getImageMimeType(filePath: string): 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp' {
     return detectImageMimeType(filePath);
+  }
+
+  /**
+   * Send autonomous notification to user (Fase 10)
+   * Called by AutonomousEngine when it generates proactive messages
+   */
+  private async sendAutonomousNotification(userId: string, message: string): Promise<void> {
+    try {
+      // TODO: Integrar con Telegram en futuras fases
+      // Por ahora solo se loggea
+      logger.info('Autonomous notification generated', {
+        userId,
+        messageLength: message.length,
+        preview: message.substring(0, 100)
+      });
+    } catch (error) {
+      logger.error('Failed to send autonomous notification', { userId, error });
+    }
+  }
+
+  /**
+   * Initialize autonomous loop for a user (Fase 10)
+   * Called when user connects
+   */
+  async initializeAutonomousMode(userId: string): Promise<void> {
+    try {
+      await this.autonomousEngine.startAutonomousLoop(userId);
+      logger.info('Autonomous mode initialized for user', { userId });
+    } catch (error) {
+      logger.error('Failed to initialize autonomous mode', { userId, error });
+    }
+  }
+
+  /**
+   * Stop autonomous loop for a user
+   */
+  async stopAutonomousMode(userId: string): Promise<void> {
+    try {
+      await this.autonomousEngine.stopAutonomousLoop(userId);
+      logger.info('Autonomous mode stopped for user', { userId });
+    } catch (error) {
+      logger.error('Failed to stop autonomous mode', { userId, error });
+    }
+  }
+
+  /**
+   * Record user feedback on an autonomous action (Fase 10)
+   */
+  async recordAutonomousFeedback(
+    userId: string,
+    actionId: string,
+    feedback: 'useful' | 'not_useful' | 'execute' | 'cancel'
+  ): Promise<void> {
+    await this.autonomousEngine.recordUserFeedback(userId, actionId, feedback);
   }
 }
