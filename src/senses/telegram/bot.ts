@@ -18,6 +18,7 @@ import { TelegramError } from '../../utils/errors.js';
 export class TelegramBot {
   private bot: Telegraf;
   private handlers: TelegramHandlers;
+  private brain: Brain;
   private allowedUserIds: Set<string>;
 
   constructor(
@@ -28,6 +29,7 @@ export class TelegramBot {
     storageConfig: StorageConfig
   ) {
     this.bot = new Telegraf(config.botToken);
+    this.brain = brain;
 
     // Initialize WhisperService
     const whisperService = new WhisperService(
@@ -99,6 +101,7 @@ export class TelegramBot {
   private setupHandlers(): void {
     // Commands
     this.bot.command('start', (ctx) => this.handlers.handleStart(ctx));
+    this.bot.command('help', (ctx) => this.handlers.handleHelp(ctx));
     this.bot.command('reset', (ctx) => this.handlers.handleReset(ctx));
     this.bot.command('profile', (ctx) => this.handlers.handleProfile(ctx));
     this.bot.command('memories', (ctx) => this.handlers.handleMemories(ctx));
@@ -107,6 +110,11 @@ export class TelegramBot {
     this.bot.command('delete', (ctx) => this.handlers.handleDelete(ctx));
     this.bot.command('cancel', (ctx) => this.handlers.handleCancel(ctx));
     this.bot.command('stats', (ctx) => this.handlers.handleStats(ctx));
+
+    // PASO 11: Task Daemon Commands
+    this.bot.command('queue', (ctx) => this.handlers.handleQueue(ctx));
+    this.bot.command('project', (ctx) => this.handlers.handleProject(ctx));
+    this.bot.command('daemon', (ctx) => this.handlers.handleDaemonStatus(ctx));
 
     // Text messages
     this.bot.on('text', (ctx) => this.handlers.handleMessage(ctx));
@@ -133,6 +141,10 @@ export class TelegramBot {
     try {
       logger.info('Starting Telegram bot...');
 
+      // Start task daemon before polling
+      logger.info('Starting autonomous task daemon...');
+      await this.brain.startTaskDaemon();
+
       // Start polling
       await this.bot.launch();
 
@@ -154,6 +166,10 @@ export class TelegramBot {
     logger.info('Stopping Telegram bot', { signal });
 
     try {
+      // Stop task daemon first
+      logger.info('Stopping autonomous task daemon...');
+      await this.brain.stopTaskDaemon();
+
       await this.bot.stop(signal);
       logger.info('Telegram bot stopped');
     } catch (error) {

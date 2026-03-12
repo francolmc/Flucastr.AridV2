@@ -11,6 +11,7 @@ import { TelegramFormatter } from './formatter.js';
 import { WhisperService } from '../../transcription/whisper.service.js';
 import { ToolActionRequest } from '../../hands/tool-actions.store.js';
 import { FileUploadManager } from '../../hands/file-upload-manager.js';
+import { TaskDaemonHandlers } from './task-daemon-handlers.js';
 import { logger } from '../../utils/logger.js';
 
 export class TelegramHandlers {
@@ -19,6 +20,7 @@ export class TelegramHandlers {
   private profileStore: ProfileStore;
   private whisperService: WhisperService;
   private fileUploadManager: FileUploadManager;
+  private taskDaemonHandlers: TaskDaemonHandlers;
 
   constructor(
     brain: Brain,
@@ -31,6 +33,7 @@ export class TelegramHandlers {
     this.profileStore = new ProfileStore();
     this.whisperService = whisperService;
     this.fileUploadManager = fileUploadManager;
+    this.taskDaemonHandlers = new TaskDaemonHandlers(brain);
   }
 
   /**
@@ -61,6 +64,11 @@ Puedo ayudarte con:
 /done - Marcar tarea como completada
 /delete - Eliminar una intención
 /stats - Ver estadísticas de uso
+
+**Daemon de Tareas (PASO 11):**
+/queue - Gestionar cola de tareas
+/project - Gestionar proyectos
+/daemon - Ver estado del daemon
 
 ¡Empecemos!`;
 
@@ -1153,5 +1161,77 @@ Puedo ayudarte con:
     } catch (e) {
       logger.error('Failed to send error message', e);
     }
+  }
+
+  /**
+   * PASO 11: Task Daemon Command Handlers
+   */
+
+  /**
+   * Delegate to TaskDaemonHandlers: /queue command
+   */
+  async handleQueue(ctx: Context): Promise<void> {
+    return this.taskDaemonHandlers.handleQueue(ctx);
+  }
+
+  /**
+   * Delegate to TaskDaemonHandlers: /project command
+   */
+  async handleProject(ctx: Context): Promise<void> {
+    return this.taskDaemonHandlers.handleProject(ctx);
+  }
+
+  /**
+   * Delegate to TaskDaemonHandlers: /daemon command
+   */
+  async handleDaemonStatus(ctx: Context): Promise<void> {
+    return this.taskDaemonHandlers.handleDaemon(ctx);
+  }
+
+  /**
+   * Handle /help command: Show all available commands
+   */
+  async handleHelp(ctx: Context): Promise<void> {
+    const helpMessage = `
+🤖 *Comandos Disponibles*
+
+*📱 Básicos*
+/start - Iniciar el asistente
+/help - Mostrar esta ayuda
+/profile - Ver tu perfil
+/reset - Reiniciar conversación
+
+*🧠 Memoria & Contexto*
+/memories - Ver memorias prospectivas
+/tasks - Ver tareas pendientes
+/done {id} - Marcar tarea como completada
+/delete {id} - Eliminar tarea
+/cancel - Cancelar acción en curso
+/stats - Estadísticas de uso
+
+*🔄 Task Daemon (Autonomía)*
+/queue list - Ver tareas en cola
+/queue add {skill} - Encolar tarea
+/queue status {id} - Estado de tarea
+/queue cancel {id} - Cancelar tarea
+
+/project list - Ver proyectos
+/project start {nombre} - Crear proyecto
+/project status {id} - Estado del proyecto
+/project pause {id} - Pausar proyecto
+/project resume {id} - Reanudar proyecto
+
+/daemon - Estado del daemon autónomo
+
+*💬 Interacción Natural*
+• Envía mensajes de texto
+• Envía mensajes de voz
+• Sube imágenes (con descripción opcional)
+• Sube documentos/videos
+
+El asistente aprende de tus interacciones y puede ejecutar tareas de forma autónoma basándose en tus patrones y necesidades.
+`;
+
+    await ctx.reply(helpMessage, { parse_mode: 'Markdown' });
   }
 }
