@@ -5,11 +5,12 @@
 
 import { readFile, writeFile, mkdir } from 'fs/promises';
 import { writeFileSync } from 'fs';
-import { join } from 'path';
+import { join, dirname } from 'path';
 import { logger } from '../utils/logger.js';
 import { StorageError } from '../utils/errors.js';
 
 interface StoreData {
+  _version?: number; // PASO 11: Schema version for migrations
   conversations: Record<string, any[]>;
   profiles: Record<string, any>;
   onboarding: Record<string, any>;
@@ -33,6 +34,7 @@ interface StoreData {
 
 export class JSONStore {
   private data: StoreData = {
+    _version: 1,
     conversations: {},
     profiles: {},
     onboarding: {},
@@ -68,6 +70,7 @@ export class JSONStore {
       }
 
       // Ensure all required sections exist
+      this.data._version = this.data._version || 1; // PASO 11: Schema version
       this.data.conversations = this.data.conversations || {};
       this.data.profiles = this.data.profiles || {};
       this.data.onboarding = this.data.onboarding || {};
@@ -530,7 +533,11 @@ export class JSONStore {
     this.data = data;
     this.saveSync();
   }
-}
 
-// Helper import
-import { dirname } from 'path';
+  /**
+   * Get the file path of the store (PASO 11: For backup operations)
+   */
+  getStorePath(): string {
+    return this.filePath;
+  }
+}

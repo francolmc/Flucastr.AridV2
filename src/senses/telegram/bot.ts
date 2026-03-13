@@ -11,6 +11,8 @@ import { WhisperService } from '../../transcription/whisper.service.js';
 import { FileUploadManager } from '../../hands/file-upload-manager.js';
 import { UploadedFilesStore } from '../../storage/uploaded-files.store.js';
 import { JSONStore } from '../../storage/json-store.js';
+import { IntegrityChecker } from '../../storage/integrity-checker.js';
+import { MigrationRunner } from '../../storage/migrations/migration-runner.js';
 import { TelegramConfig, WhisperConfig, StorageConfig } from '../../config/types.js';
 import { logger } from '../../utils/logger.js';
 import { TelegramError } from '../../utils/errors.js';
@@ -116,6 +118,12 @@ export class TelegramBot {
     this.bot.command('project', (ctx) => this.handlers.handleProject(ctx));
     this.bot.command('daemon', (ctx) => this.handlers.handleDaemonStatus(ctx));
 
+    // PASO 11: Maintenance Commands
+    this.bot.command('version', (ctx) => this.handlers.handleVersion(ctx));
+    this.bot.command('update', (ctx) => this.handlers.handleUpdate(ctx));
+    this.bot.command('backup', (ctx) => this.handlers.handleBackup(ctx));
+    this.bot.command('restore', (ctx) => this.handlers.handleRestore(ctx));
+
     // Text messages
     this.bot.on('text', (ctx) => this.handlers.handleMessage(ctx));
 
@@ -140,6 +148,27 @@ export class TelegramBot {
   async start(): Promise<void> {
     try {
       logger.info('Starting Telegram bot...');
+
+      // PASO 11: Check data integrity
+      logger.info('Checking store integrity...');
+      const jsonStore = new JSONStore(this.brain ? '' : '');
+      const integrityChecker = new IntegrityChecker('./data/store.json');
+      const integrityReport = await integrityChecker.checkStoreIntegrity();
+      
+      if (!integrityReport.isValid) {
+        logger.warn('Store integrity issues detected', integrityReport);
+        const repaired = await integrityChecker.repairStore();
+        if (repaired.repairs.length > 0) {
+          logger.info('Store auto-repaired', { repairs: repaired.repairs });
+        }
+      } else {
+        logger.info('Store integrity check passed');
+      }
+
+      // PASO 11: Run pending migrations
+      logger.info('Running pending migrations...');
+      const migrationRunner = new MigrationRunner('./data/store.json');
+      await migrationRunner.runPendingMigrations();
 
       // Start task daemon before polling
       logger.info('Starting autonomous task daemon...');

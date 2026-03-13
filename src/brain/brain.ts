@@ -52,6 +52,7 @@ import { AutonomousDaemon } from '../autonomous/autonomous-daemon.js';
 import { ProjectStateTracker } from '../autonomous/project-state.js';
 import { TaskReporter } from '../autonomous/task-reporter.js';
 import { TaskEnqueuer } from '../autonomous/task-enqueuer.js';
+import { BackupManager } from '../storage/backup-manager.js';
 
 export interface BrainConfig {
   conversationProvider: LLMProvider;
@@ -112,6 +113,7 @@ export class Brain {
   private projectStateTracker: ProjectStateTracker;
   private taskReporter: TaskReporter;
   private taskEnqueuer: TaskEnqueuer;
+  private backupManager: BackupManager;
   
   // Estado de flujo de credenciales en progreso
   // Mantiene contexto: "estoy esperando credencial X para skill Y"
@@ -247,6 +249,13 @@ export class Brain {
       this.taskQueueStore,
       backgroundExecutor,
       this.skillThreadExecutor
+    );
+
+    // PASO 11: Initialize BackupManager for production data backup
+    const storeFilePath = jsonStore.getStorePath();
+    this.backupManager = new BackupManager(
+      config.workspacePath + '/data/backups',
+      storeFilePath
     );
 
     logger.info('Brain initialized', {
@@ -1721,6 +1730,13 @@ export class Brain {
    */
   getProjectTracker() {
     return this.projectStateTracker;
+  }
+
+  /**
+   * Get access to backup manager for data persistence (PASO 11)
+   */
+  getBackupManager() {
+    return this.backupManager;
   }
 
   /**

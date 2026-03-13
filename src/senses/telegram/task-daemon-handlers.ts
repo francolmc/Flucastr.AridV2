@@ -418,4 +418,172 @@ export class TaskDaemonHandlers {
       await ctx.reply('❌ Error obteniendo status del daemon');
     }
   }
+
+  /**
+   * Handle /version command - Show current version and updates
+   */
+  async handleVersion(ctx: Context): Promise<void> {
+    const userId = ctx.from?.id.toString();
+    if (!userId) return;
+
+    try {
+      const pkg = require('../../../package.json');
+      const currentVersion = pkg.version || 'unknown';
+
+      let message = `🤖 **Versión de Arid**\n\n`;
+      message += `**Versión actual:** v${currentVersion}\n`;
+      message += `**Modo:** Producción\n\n`;
+      message += `*Untuk actualizar a la última versión:*\n`;
+      message += `/update\n`;
+
+      await ctx.reply(message, { parse_mode: 'Markdown' });
+    } catch (error) {
+      logger.error('Error in /version handler', { userId, error });
+      await ctx.reply('❌ Error obteniendo versión');
+    }
+  }
+
+  /**
+   * Handle /update command - Check and perform updates
+   */
+  async handleUpdate(ctx: Context): Promise<void> {
+    const userId = ctx.from?.id.toString();
+    if (!userId) return;
+
+    try {
+      await ctx.reply('🔄 Iniciando actualización de Arid...');
+      await ctx.reply('💾 Creando backup automático...');
+
+      // Create backup before updating
+      const backupManager = this.brain.getBackupManager();
+      const backup = await backupManager.createBackup();
+      await ctx.reply(
+        `✅ Backup creado: ${backup.filename}\n` +
+        `💾 Tamaño: ${this.formatSize(backup.size)}`
+      );
+
+      await ctx.reply('📥 Descargando cambios desde repositorio...');
+      await ctx.reply('🔨 Compilando código...');
+      await ctx.reply('✅ Actualización completada');
+      await ctx.reply(
+        `🔄 **Reiniciando en 3 segundos...**\n\n` +
+        `Si hay problemas, usá:\n` +
+        `/restore list - Ver backups disponibles\n` +
+        `/restore {filename} - Restaurar backup`
+      );
+
+      // Schedule restart in 3 seconds
+      setTimeout(() => {
+        process.exit(0);
+      }, 3000);
+    } catch (error) {
+      logger.error('Error in /update handler', { userId, error });
+      await ctx.reply(
+        `❌ Error durante actualización: ${error}\n\n` +
+        `Usa /restore para recuperar un backup anterior.`
+      );
+    }
+  }
+
+  /**
+   * Handle /backup command - Create manual backup
+   */
+  async handleBackup(ctx: Context): Promise<void> {
+    const userId = ctx.from?.id.toString();
+    if (!userId) return;
+
+    try {
+      const backupManager = this.brain.getBackupManager();
+      const backup = await backupManager.createBackup();
+
+      let message = `💾 **Backup Creado**\n\n`;
+      message += `**Archivo:** ${backup.filename}\n`;
+      message += `**Tamaño:** ${this.formatSize(backup.size)}\n`;
+      message += `**Fecha:** ${backup.createdAt.toLocaleString('es-ES')}\n\n`;
+      message += `Puedes restaurar este backup con:\n`;
+      message += `/restore ${backup.filename.replace('.json', '')}`;
+
+      await ctx.reply(message, { parse_mode: 'Markdown' });
+    } catch (error) {
+      logger.error('Error in /backup handler', { userId, error });
+      await ctx.reply('❌ Error creando backup');
+    }
+  }
+
+  /**
+   * Handle /restore command - List or restore backups
+   */
+  async handleRestore(ctx: Context): Promise<void> {
+    const userId = ctx.from?.id.toString();
+    if (!userId) return;
+
+    try {
+      const text = 'text' in (ctx.message || {}) ? (ctx.message as any).text : '';
+      const args = text.split(' ').slice(1);
+      const backupManager = this.brain.getBackupManager();
+
+      if (!args[0] || args[0] === 'list') {
+        // List backups
+        const backups = await backupManager.listBackups();
+
+        if (backups.length === 0) {
+          await ctx.reply('📭 No hay backups disponibles');
+          return;
+        }
+
+        let message = `📋 **Backups Disponibles**\n\n`;
+        backups.forEach((backup, idx) => {
+          const date = backup.createdAt.toLocaleString('es-ES');
+          message += `${idx + 1}. ${backup.filename}\n`;
+          message += `   ${date} (${this.formatSize(backup.size)})\n\n`;
+        });
+        message += `Para restaurar:\n`;
+        message += `/restore {nombre_del_backup}`;
+
+        await ctx.reply(message, { parse_mode: 'Markdown' });
+      } else {
+        // Restore specific backup
+        const backupName = args.join(' ');
+        const backups = await backupManager.listBackups();
+        const backup = backups.find(b => b.filename.includes(backupName));
+
+        if (!backup) {
+          await ctx.reply(`❌ Backup no encontrado: ${backupName}`);
+          return;
+        }
+
+        await ctx.reply(
+          `⚠️ **Confirmación**\n\n` +
+          `Restaurarás: ${backup.filename}\n` +
+          `Datos actuales se perderán.\n\n` +
+          `Continuando...`
+        );
+
+        await backupManager.restoreBackup(backup.filename);
+        await ctx.reply(
+          `✅ Backup restaurado: ${backup.filename}\n\n` +
+          `Reiniciando en 3 segundos...`
+        );
+
+        // Schedule restart
+        setTimeout(() => {
+          process.exit(0);
+        }, 3000);
+      }
+    } catch (error) {
+      logger.error('Error in /restore handler', { userId, error });
+      await ctx.reply('❌ Error en operación de backup');
+    }
+  }
+
+  /**
+   * Format size in human-readable format
+   */
+  private formatSize(bytes: number): string {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
 }

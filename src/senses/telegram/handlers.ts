@@ -1189,6 +1189,34 @@ Puedo ayudarte con:
   }
 
   /**
+   * Delegate to TaskDaemonHandlers: /version command
+   */
+  async handleVersion(ctx: Context): Promise<void> {
+    return this.taskDaemonHandlers.handleVersion(ctx);
+  }
+
+  /**
+   * Delegate to TaskDaemonHandlers: /update command
+   */
+  async handleUpdate(ctx: Context): Promise<void> {
+    return this.taskDaemonHandlers.handleUpdate(ctx);
+  }
+
+  /**
+   * Delegate to TaskDaemonHandlers: /backup command
+   */
+  async handleBackup(ctx: Context): Promise<void> {
+    return this.taskDaemonHandlers.handleBackup(ctx);
+  }
+
+  /**
+   * Delegate to TaskDaemonHandlers: /restore command
+   */
+  async handleRestore(ctx: Context): Promise<void> {
+    return this.taskDaemonHandlers.handleRestore(ctx);
+  }
+
+  /**
    * Handle /help command: Show all available commands
    */
   async handleHelp(ctx: Context): Promise<void> {
@@ -1223,7 +1251,14 @@ Puedo ayudarte con:
 
 /daemon - Estado del daemon autónomo
 
-*💬 Interacción Natural*
+*� Mantenimiento & Sistema*
+/version - Ver versión actual
+/update - Actualizar Arid a última versión
+/backup - Crear backup manual
+/restore list - Ver backups disponibles
+/restore {nombre} - Restaurar desde backup
+
+*�💬 Interacción Natural*
 • Envía mensajes de texto
 • Envía mensajes de voz
 • Sube imágenes (con descripción opcional)
