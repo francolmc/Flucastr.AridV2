@@ -41,7 +41,7 @@ export interface LLMConfig {
 
 export interface StorageConfig {
   storePath: string;
-  workspacePath: string;
+  userDataPath: string;  // Ruta a workspace/ donde viven PROFILE.md, skills, documentos, etc.
 }
 
 export interface WhisperConfig {
@@ -51,7 +51,7 @@ export interface WhisperConfig {
 }
 
 export interface ToolsConfig {
-  workspacePath: string;
+  toolsSandboxRoot: string;  // Directorio raíz para sandboxing de herramientas (file operations)
   tavilyApiKey?: string;
 }
 

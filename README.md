@@ -64,14 +64,14 @@
 ### Fase 7 ✅ (Completada) - **LAS MANOS DEL ASISTENTE**
 
 - ✅ **Ejecutar Comandos:** Shell commands con validación exhaustiva de seguridad
-- ✅ **Leer Archivos:** Acceso a archivos dentro del workspace
+- ✅ **Leer Archivos:** Acceso a archivos dentro del directorio raíz del proyecto (incluida carpeta workspace/)
 - ✅ **Escribir Archivos:** Crear y modificar archivos (con confirmación)
 - ✅ **Listar Directorios:** Explorar estructura de carpetas
 - ✅ **Búsqueda Web:** Integración con Tavily API para información actualizada
 - ✅ **Sistema de Confirmación:** Botones inline en Telegram para acciones peligrosas
 - ✅ **Detección Natural:** LLM analiza solicitudes sin keywords
 - ✅ **Seguridad Extrema:** Lista negra, validación de paths, timeouts, sanitización
-- ✅ **Sandbox Estricto:** Solo opera dentro del workspace del proyecto
+- ✅ **Sandbox Estricto:** Solo opera dentro del directorio raíz del proyecto
 
 ### Fase 8 ✅ (Completada) - **VISIÓN Y GESTIÓN DE ARCHIVOS**
 

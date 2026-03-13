@@ -37,14 +37,14 @@ async function main() {
       conversationProvider: providers.conversation,
       reasoningProvider: providers.reasoning,
       analyzerProvider: providers.analyzer,
-      workspacePath: config.tools.workspacePath,
+      userDataPath: config.storage.userDataPath,
       tavilyApiKey: config.tools.tavilyApiKey,
       storageEncryptionKey: config.skills.encryptionKey
     });
     logger.info('Brain initialized');
 
     // 5. Initialize Onboarding Service
-    const onboardingService = new OnboardingService(config.storage.workspacePath);
+    const onboardingService = new OnboardingService(config.storage.userDataPath);
     logger.info('Onboarding service initialized');
 
     // 6. Initialize Telegram Bot (with storage config for Fase 8)

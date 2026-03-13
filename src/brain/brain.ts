@@ -58,7 +58,7 @@ export interface BrainConfig {
   conversationProvider: LLMProvider;
   reasoningProvider: LLMProvider;
   analyzerProvider: LLMProvider;
-  workspacePath: string;
+  userDataPath: string;  // Path a workspace/ (PROFILE.md, skills, documentos, logs, uploads)
   tavilyApiKey?: string;
   storageEncryptionKey: string; // Fase 5: Para credenciales de skills
 }
@@ -131,7 +131,7 @@ export class Brain {
     this.prospectiveExtractor = new ProspectiveMemoryExtractor(config.analyzerProvider);
     this.prospectiveCommandAnalyzer = new ProspectiveCommandAnalyzer();
     this.toolsAnalyzer = new ToolsAnalyzer(config.analyzerProvider);
-    this.toolExecutor = new ToolExecutor(config.workspacePath, config.tavilyApiKey);
+    this.toolExecutor = new ToolExecutor(config.userDataPath, config.tavilyApiKey);
     this.conversationStore = new ConversationStore();
     this.profileStore = new ProfileStore();
     this.memoryStore = new MemoryStore();
@@ -141,7 +141,7 @@ export class Brain {
 
     // Fase 5: Initialize skill components
     const credentialsStore = new CredentialsStore(config.storageEncryptionKey);
-    const skillStore = new SkillStore(config.workspacePath);
+    const skillStore = new SkillStore(config.userDataPath);
     
     this.skillStore = skillStore;
     this.skillMatcher = new SkillMatcher(skillStore, config.analyzerProvider);
@@ -153,7 +153,7 @@ export class Brain {
       this.skillLoader,
       this.toolActionsStore
     );
-    this.skillThreadExecutor = new SkillThreadExecutor(config.workspacePath);
+    this.skillThreadExecutor = new SkillThreadExecutor(config.userDataPath);
     this.skillNotifications = new SkillNotifications();
     this.credentialsStore = credentialsStore;
     this.storageEncryptionKey = config.storageEncryptionKey;
@@ -243,7 +243,7 @@ export class Brain {
       telegramSender,
     });
     
-    const backgroundExecutor = new BackgroundExecutor(config.workspacePath);
+    const backgroundExecutor = new BackgroundExecutor(config.userDataPath);
     
     this.autonomousDaemon = new AutonomousDaemon(
       this.taskQueueStore,
@@ -254,14 +254,14 @@ export class Brain {
     // PASO 11: Initialize BackupManager for production data backup
     const storeFilePath = jsonStore.getStorePath();
     this.backupManager = new BackupManager(
-      config.workspacePath + '/data/backups',
+      config.userDataPath + '/data/backups',
       storeFilePath
     );
 
     logger.info('Brain initialized', {
       conversation: this.conversationProvider.getName(),
       reasoning: this.reasoningProvider.getName(),
-      workspacePath: config.workspacePath,
+      userDataPath: config.userDataPath,
       webSearchEnabled: !!config.tavilyApiKey
     });
   }

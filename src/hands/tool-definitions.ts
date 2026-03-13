@@ -19,13 +19,13 @@ export interface ToolDefinition {
 export const AVAILABLE_TOOLS: ToolDefinition[] = [
   {
     name: 'execute_command',
-    description: 'Ejecuta un comando shell en el workspace. Útil para operaciones de sistema, git, npm, curl, APIs, etc. Retorna la salida del comando.',
+    description: 'Ejecuta un comando shell en el directorio raíz del proyecto. Útil para operaciones de sistema, git, npm, curl, APIs, etc. Retorna la salida del comando. El acceso a archivos se limita al directorio raíz (ej: workspace/documentos/archivo.txt es accesible).',
     input_schema: {
       type: 'object',
       properties: {
         command: {
           type: 'string',
-          description: 'El comando shell a ejecutar (ej: "curl -s https://api.github.com/user", "ls -la", "git status")'
+          description: 'El comando shell a ejecutar (ej: "curl -s https://api.github.com/user", "ls workspace/", "git status")'
         },
         description: {
           type: 'string',
@@ -37,13 +37,13 @@ export const AVAILABLE_TOOLS: ToolDefinition[] = [
   },
   {
     name: 'read_file',
-    description: 'Lee el contenido completo de un archivo del workspace.',
+    description: 'Lee el contenido completo de un archivo dentro del directorio raíz del proyecto. Puedes acceder a cualquier archivo dentro del directorio incluida la carpeta workspace/ (ej: workspace/PROFILE.md, workspace/documentos/mi-archivo.txt).',
     input_schema: {
       type: 'object',
       properties: {
         file_path: {
           type: 'string',
-          description: 'Ruta relativa del archivo a leer (relativo al workspace)'
+          description: 'Ruta relativa del archivo a leer (relativo al directorio raíz, ej: "workspace/PROFILE.md", "workspace/documentos/archivo.txt", "src/index.ts")'
         }
       },
       required: ['file_path']
@@ -51,13 +51,13 @@ export const AVAILABLE_TOOLS: ToolDefinition[] = [
   },
   {
     name: 'write_file',
-    description: 'Escribe o sobrescribe un archivo en el workspace.',
+    description: 'Escribe o sobrescribe un archivo dentro del directorio raíz del proyecto. Puedes crear/escribir archivos en workspace/ y otras carpetas (ej: workspace/documentos/nuevo-archivo.txt).',
     input_schema: {
       type: 'object',
       properties: {
         file_path: {
           type: 'string',
-          description: 'Ruta relativa del archivo a escribir'
+          description: 'Ruta relativa del archivo a escribir (relativo al directorio raíz, ej: "workspace/documentos/archivo.txt", "workspace/nota.md")'
         },
         content: {
           type: 'string',

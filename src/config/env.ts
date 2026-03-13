@@ -49,15 +49,16 @@ export function loadConfig(): Config {
 
   // Storage
   const storePath = process.env.STORE_PATH || './data/store.json';
-  const workspacePath = process.env.WORKSPACE_PATH || './workspace';
+  // User data directory (workspace/) - where PROFILE.md, skills, docs live
+  const userDataPath = process.env.WORKSPACE_PATH || './workspace';
 
   // Whisper
   const whisperUrl = process.env.WHISPER_URL || 'http://localhost:9000';
   const whisperModel = process.env.WHISPER_MODEL || 'base';
   const whisperLanguage = process.env.WHISPER_LANGUAGE || 'es';
 
-  // Tools
-  const toolsWorkspacePath = process.env.TOOLS_WORKSPACE_PATH || process.cwd();
+  // Tools - Sandbox root for file operations  
+  const toolsSandboxRoot = process.env.TOOLS_WORKSPACE_PATH || process.cwd();
   const tavilyApiKey = process.env.TAVILY_API_KEY;
 
   // Skills Encryption (Fase 9)
@@ -94,7 +95,7 @@ export function loadConfig(): Config {
     },
     storage: {
       storePath,
-      workspacePath,
+      userDataPath,
     },
     whisper: {
       url: whisperUrl,
@@ -102,7 +103,7 @@ export function loadConfig(): Config {
       language: whisperLanguage,
     },
     tools: {
-      workspacePath: toolsWorkspacePath,
+      toolsSandboxRoot,
       tavilyApiKey,
     },
     skills: {
