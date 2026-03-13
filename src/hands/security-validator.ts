@@ -108,7 +108,10 @@ export class SecurityValidator {
     // Prevenir path traversal - verificar que esté dentro del workspace
     if (!resolvedPath.startsWith(workspacePath)) {
       throw new ToolExecutionError(
-        `Acceso denegado: el path "${filePath}" está fuera del workspace del proyecto.`
+        `Acceso denegado: el path resuelto está fuera del directorio raíz permitido. ` +
+        `Path solicitado: "${filePath}", Directorio raíz: "${workspacePath}". ` +
+        `Ruta absoluta intenta: "${resolvedPath}". ` +
+        `Nota: La carpeta workspace/ es completamente accesible para tus datos personales.`
       );
     }
 
@@ -116,7 +119,8 @@ export class SecurityValidator {
     for (const systemPath of this.SYSTEM_PATHS) {
       if (resolvedPath.startsWith(systemPath)) {
         throw new ToolExecutionError(
-          `Acceso denegado: no se puede acceder a paths del sistema (${systemPath}).`
+          `Acceso denegado: no se puede acceder a paths del sistema (${systemPath}). ` +
+          `Para trabajar con tus datos, usa rutas dentro del directorio raíz permitido.`
         );
       }
     }

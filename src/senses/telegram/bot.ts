@@ -44,7 +44,7 @@ export class TelegramBot {
     const jsonStore = new JSONStore(storageConfig.storePath);
     const uploadedFilesStore = new UploadedFilesStore(jsonStore);
     const fileUploadManager = new FileUploadManager(
-      storageConfig.workspacePath,
+      storageConfig.userDataPath,
       uploadedFilesStore
     );
 
